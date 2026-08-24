@@ -478,12 +478,71 @@ function filterFlowerLookup(){
  }
 }
 function renderFlowerOwners(){
- const flowerId=lookupFlower.value, f=flowers.find(x=>x.id===flowerId);
- if(!f){flowerOwnerSummary.textContent='请选择花朵';flowerOwnerResult.innerHTML='';return}
- const ownerIds=new Set(memberFlowers.filter(x=>x.flower_id===flowerId&&x.quantity>0).map(x=>x.member_id));
- const owners=members.filter(m=>ownerIds.has(m.id));
- flowerOwnerSummary.textContent=`${f.name}｜共有 ${owners.length} 位成员拥有`;
- flowerOwnerResult.innerHTML=owners.length?`<div class="table-wrap"><table><thead><tr><th>拥有成员</th></tr></thead><tbody>${owners.map(m=>`<tr><td>${esc(m.name)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="hint">目前没有成员拥有这朵花</div>'
+    const flowerId=lookupFlower.value;
+    const f=flowers.find(x=>x.id===flowerId);
+
+    if(!f){
+        flowerOwnerSummary.textContent='请选择花朵';
+        flowerOwnerResult.innerHTML='';
+        return;
+    }
+
+    const ownerIds=new Set(
+        memberFlowers
+            .filter(x=>x.flower_id===flowerId && x.quantity>0)
+            .map(x=>x.member_id)
+    );
+
+    const owners=members.filter(m=>ownerIds.has(m.id));
+
+    flowerOwnerSummary.textContent=
+        `${f.name}｜共有 ${owners.length} 位成员拥有`;
+
+    const flowerImage=f.image_url
+        ? `
+        <div style="text-align:center;margin:18px 0;">
+            <img
+                src="${esc(f.image_url)}"
+                alt="${esc(f.name)}"
+                style="
+                    width:180px;
+                    height:180px;
+                    object-fit:cover;
+                    border-radius:18px;
+                    box-shadow:0 3px 12px rgba(0,0,0,.10);
+                "
+            >
+            <div style="font-weight:bold;font-size:18px;margin-top:8px;">
+                ${esc(f.name)}
+                <span class="tag">${esc(f.category)}</span>
+            </div>
+        </div>
+        `
+        : '';
+
+    flowerOwnerResult.innerHTML=
+        flowerImage +
+        (owners.length
+            ? `
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>拥有成员</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${owners.map(m=>`
+                            <tr>
+                                <td>${esc(m.name)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            `
+            : `<div class="hint">目前没有成员拥有这朵花</div>`
+        );
 }
 function openAdminLogin(){
  const savedEmail=localStorage.getItem(ADMIN_EMAIL_KEY)||'';
