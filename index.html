@@ -29,19 +29,149 @@ button{border:none;font-weight:700;cursor:pointer}.primary{background:var(--pink
 .modal{display:none;position:fixed;inset:0;background:#0007;align-items:center;justify-content:center;padding:18px;z-index:999}.modal .card{width:min(420px,100%);margin:0}
 .adminBadge{display:inline-block;padding:5px 10px;background:#fff0f7;color:#c2417a;border-radius:999px;font-size:12px;font-weight:700}
 @media(max-width:700px){.app{padding:12px}h1{font-size:23px}.row{display:grid;grid-template-columns:1fr}.row button{width:100%}.grid{grid-template-columns:1fr 1fr}.flower img,.noimg{height:120px}}
+  /* ===== 平安公会 · 可爱花园主题 ===== */
+
+body{
+  background:
+    radial-gradient(circle at 10% 10%, #fff0f7 0, transparent 28%),
+    radial-gradient(circle at 90% 20%, #fff7dc 0, transparent 25%),
+    linear-gradient(135deg,#fff8fc,#f3fff5);
+}
+
+.garden-header{
+  text-align:center;
+  position:relative;
+  overflow:hidden;
+  border:2px solid #ffd5e6;
+  background:linear-gradient(180deg,#fff9fc 0%,#fff 55%,#f5fff7 100%);
+}
+
+.garden-header::before{
+  content:"🌸";
+  position:absolute;
+  left:18px;
+  top:18px;
+  font-size:42px;
+  opacity:.16;
+  transform:rotate(-15deg);
+}
+
+.garden-header::after{
+  content:"🌷";
+  position:absolute;
+  right:18px;
+  bottom:15px;
+  font-size:46px;
+  opacity:.16;
+  transform:rotate(12deg);
+}
+
+.garden-deco{
+  font-size:22px;
+  letter-spacing:8px;
+  margin-bottom:5px;
+}
+
+.garden-title{
+  font-size:32px;
+  color:#e65393;
+  margin:4px 0 8px;
+  text-shadow:0 2px 0 #fff;
+}
+
+.garden-subtitle{
+  display:inline-block;
+  padding:7px 18px;
+  border-radius:999px;
+  background:#fff0f7;
+  color:#c94e84;
+  font-weight:700;
+  margin-bottom:13px;
+}
+
+.guild-message{
+  max-width:850px;
+  margin:5px auto 15px;
+  padding:15px 20px;
+  line-height:1.9;
+  color:#755463;
+  background:rgba(255,255,255,.85);
+  border:1px dashed #f3a8c8;
+  border-radius:18px;
+}
+
+.garden-login{
+  justify-content:center;
+}
+
+.tabs{
+  justify-content:center;
+  padding:5px;
+}
+
+.tab{
+  transition:.2s;
+}
+
+.tab:hover{
+  transform:translateY(-2px);
+}
+
+.flower{
+  transition:.2s;
+  border:1px solid #f3e3eb;
+}
+
+.flower:hover{
+  transform:translateY(-3px);
+  box-shadow:0 10px 24px rgba(220,100,150,.12);
+}
+
+.flower img{
+  transition:.25s;
+}
+
+.flower:hover img{
+  transform:scale(1.03);
+}
+
+input:focus,
+select:focus{
+  outline:none;
+  border-color:#ef8fba;
+  box-shadow:0 0 0 3px rgba(232,93,158,.10);
+}
 </style>
 </head>
 <body>
 <div class="app">
-<section class="card">
-<h1>🌸 平安公会的花园世界</h1>
-<div class="sub">多人共用花花统计｜成员免密码｜管理员维护花库</div>
-<div id="connection" class="status">正在连接云端资料…</div>
-<div class="row" style="margin-top:10px">
-<button class="secondary" onclick="openAdminLogin()">🔐 管理员登录</button>
-<button id="adminLogoutBtn" class="danger admin-only" onclick="adminLogout()">退出管理员</button>
-<div id="modeText" class="hint">成员模式</div>
-</div>
+<section class="card garden-header">
+
+  <div class="garden-deco">🌸 🌷 🌼 🌿 🌺</div>
+
+  <h1 class="garden-title">
+    🌸 平安公会的花园世界 🌸
+  </h1>
+
+  <div class="garden-subtitle">
+    🌱 一起种花 · 一起成长 · 一起开心玩耍 🌱
+  </div>
+
+  <div class="guild-message">
+    💌 好的公会会在不断磨练中成长，有摩擦太正常啦～<br>
+    我们要做的是相信彼此，包容彼此，总结教训找到方法，打好配合，遵守规则。<br>
+    虽说只是个游戏，我们开心玩耍，理性种花，<br>
+    大家在一起长长久久不分开，拉勾勾哦～ 🤙💕
+  </div>
+
+  <div id="connection" class="status">🌱 正在连接花园资料...</div>
+
+  <div class="row garden-login" style="margin-top:10px">
+    <button class="secondary" onclick="openAdminLogin()">🔐 管理员登录</button>
+    <button id="adminLogoutBtn" class="danger admin-only" onclick="adminLogout()">退出管理员</button>
+    <div id="modeText" class="hint">成员模式</div>
+  </div>
+
 </section>
 
 <section class="card">
