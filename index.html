@@ -304,10 +304,10 @@ const ADMIN_MEMBER_MAP={'elynw...@gmail.com':'太史玟婷'};
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function showTab(id,btn){document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active')}
 function adminUI(){
- document.querySelectorAll('.admin-only').forEach(x=>x.style.display=isAdmin?'block':'none');
- modeText.textContent=isAdmin?`管理员模式：${sessionUser?.email||''}${localStorage.getItem(ADMIN_REMEMBER_KEY)==='true'?'（已自动登录）':''}`:'成员模式（免密码）';
- if(adminEmailBadge)adminEmailBadge.textContent=sessionUser?.email||'';
- if(!isAdmin&&admin.classList.contains('active'))showTab('mine',document.querySelector('.tab'));
+  document.querySelectorAll('.admin-only').forEach(x=>x.style.display=isAdmin?'block':'none');
+  modeText.textContent=isAdmin?'⚙️ 管理员模式（已登录）':'🌷 成员模式';
+  if(adminEmailBadge)adminEmailBadge.textContent=sessionUser?.email||'';
+  if(!isAdmin&&admin.classList.contains('active'))showTab('mine',document.querySelector('.tab'));
 }
 async function ensureSession(){
  const {data}=await sb.auth.getSession();
