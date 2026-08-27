@@ -141,6 +141,38 @@ select:focus{
   border-color:#ef8fba;
   box-shadow:0 0 0 3px rgba(232,93,158,.10);
 }
+
+/* ===== 可爱分类按钮 ===== */
+.cute-filter{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+  flex:1;
+}
+.filter-btn{
+  border:1px solid #ffd2e4;
+  background:#fff8fb;
+  color:#a85a7c;
+  padding:9px 14px;
+  border-radius:999px;
+  box-shadow:0 3px 10px rgba(232,93,158,.08);
+  transition:.2s;
+}
+.filter-btn:hover{
+  transform:translateY(-2px);
+  background:#fff0f7;
+}
+.filter-btn.active{
+  background:linear-gradient(135deg,#f58abb,#e85d9e);
+  color:#fff;
+  border-color:transparent;
+  box-shadow:0 6px 14px rgba(232,93,158,.22);
+}
+@media(max-width:700px){
+  .cute-filter{display:grid;grid-template-columns:repeat(3,1fr);width:100%}
+  .filter-btn{width:100%;padding:9px 8px}
+}
 </style>
 </head>
 <body>
@@ -196,8 +228,23 @@ select:focus{
 <div id="memberTools">
 <div class="row" style="margin-top:14px">
 <input id="searchFlower" type="search" name="garden_flower_search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="🔎 输入花名搜索" oninput="renderCatalog()">
-<select id="filterClass" onchange="renderCatalog()">
-<option value="">全部分类</option><option>凡</option><option>普</option><option>珍</option><option>华</option><option>仙</option>
+<!-- 可爱分类按钮 -->
+<div class="cute-filter">
+  <button type="button" class="filter-btn active" onclick="setFlowerClass('',this)">🌸 全部</button>
+  <button type="button" class="filter-btn" onclick="setFlowerClass('凡',this)">🌱 凡</button>
+  <button type="button" class="filter-btn" onclick="setFlowerClass('普',this)">🌼 普</button>
+  <button type="button" class="filter-btn" onclick="setFlowerClass('珍',this)">💎 珍</button>
+  <button type="button" class="filter-btn" onclick="setFlowerClass('华',this)">🌺 华</button>
+  <button type="button" class="filter-btn" onclick="setFlowerClass('仙',this)">✨ 仙</button>
+</div>
+
+<select id="filterClass" onchange="renderCatalog()" style="display:none">
+  <option value="">全部分类</option>
+  <option>凡</option>
+  <option>普</option>
+  <option>珍</option>
+  <option>华</option>
+  <option>仙</option>
 </select>
 </div>
 <div id="catalogGrid" class="grid" style="margin-top:14px"></div>
@@ -364,7 +411,7 @@ memberFlowers=mf.data||[];
    const a=await sb.from('admins').select('*').order('email');
    admins=a.error?[]:(a.data||[]);
   }
-  connection.textContent='✅ 已连接「我的花园世界」云端资料';
+  connection.textContent='✅ 已连接「平安公会的花园世界」云端资料';
   renderAll()
  }catch(e){connection.textContent='❌ 连接失败：'+e.message}
 }
@@ -399,6 +446,14 @@ async function claimMember(){
  localStorage.setItem(MEMBER_STORAGE_KEY,id);
  renderAll();
 }
+
+function setFlowerClass(category,btn){
+  filterClass.value=category;
+  document.querySelectorAll('.filter-btn').forEach(x=>x.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderCatalog();
+}
+
 function renderCatalog(){
  // Guard against browser password-manager/autofill putting the signed-in email in this unrelated search box.
  if(sessionUser?.email && searchFlower.value.trim().toLowerCase()===sessionUser.email.trim().toLowerCase()) searchFlower.value='';
