@@ -231,11 +231,11 @@ select:focus{
 <!-- 可爱分类按钮 -->
 <div class="cute-filter">
   <button type="button" class="filter-btn active" onclick="setFlowerClass('',this)">🌸 全部</button>
-  <button type="button" class="filter-btn" onclick="setFlowerClass('凡',this)">🌱 凡</button>
-  <button type="button" class="filter-btn" onclick="setFlowerClass('普',this)">🌼 普</button>
-  <button type="button" class="filter-btn" onclick="setFlowerClass('珍',this)">💎 珍</button>
-  <button type="button" class="filter-btn" onclick="setFlowerClass('华',this)">🌺 华</button>
   <button type="button" class="filter-btn" onclick="setFlowerClass('仙',this)">✨ 仙</button>
+  <button type="button" class="filter-btn" onclick="setFlowerClass('华',this)">🌺 华</button>
+  <button type="button" class="filter-btn" onclick="setFlowerClass('珍',this)">💎 珍</button>
+  <button type="button" class="filter-btn" onclick="setFlowerClass('普',this)">🌼 普</button>
+  <button type="button" class="filter-btn" onclick="setFlowerClass('凡',this)">🌱 凡</button>
 </div>
 
 <select id="filterClass" onchange="renderCatalog()" style="display:none">
@@ -405,7 +405,18 @@ if(f.error)throw f.error;
 if(mf.error)throw mf.error;
 
 members=m.data||[];
-flowers=f.data||[];
+flowers=(f.data||[]).sort((a,b)=>{
+  const order={仙:0,华:1,珍:2,普:3,凡:4};
+  const ca=order[a.category] ?? 99;
+  const cb=order[b.category] ?? 99;
+  if(ca!==cb)return ca-cb;
+
+  const sa=Number(a.guild_score)||0;
+  const sbScore=Number(b.guild_score)||0;
+  if(sa!==sbScore)return sbScore-sa;
+
+  return String(a.name||'').localeCompare(String(b.name||''),'zh-CN');
+});
 memberFlowers=mf.data||[];
   if(isAdmin){
    const a=await sb.from('admins').select('*').order('email');
