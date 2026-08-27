@@ -230,12 +230,12 @@ select:focus{
 <input id="searchFlower" type="search" name="garden_flower_search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="🔎 输入花名搜索" oninput="renderCatalog()">
 <!-- 可爱分类按钮 -->
 <div class="cute-filter">
-  <button type="button" class="filter-btn active" onclick="setFlowerClass('',this)">🌸 全部</button>
-  <button type="button" class="filter-btn" onclick="setFlowerClass('仙',this)">✨ 仙</button>
-  <button type="button" class="filter-btn" onclick="setFlowerClass('华',this)">🌺 华</button>
-  <button type="button" class="filter-btn" onclick="setFlowerClass('珍',this)">💎 珍</button>
-  <button type="button" class="filter-btn" onclick="setFlowerClass('普',this)">🌼 普</button>
-  <button type="button" class="filter-btn" onclick="setFlowerClass('凡',this)">🌱 凡</button>
+  <button type="button" class="filter-btn mine-filter-btn active" onclick="setFlowerClass('',this)">🌸 全部</button>
+  <button type="button" class="filter-btn mine-filter-btn" onclick="setFlowerClass('仙',this)">✨ 仙</button>
+  <button type="button" class="filter-btn mine-filter-btn" onclick="setFlowerClass('华',this)">🌺 华</button>
+  <button type="button" class="filter-btn mine-filter-btn" onclick="setFlowerClass('珍',this)">💎 珍</button>
+  <button type="button" class="filter-btn mine-filter-btn" onclick="setFlowerClass('普',this)">🌼 普</button>
+  <button type="button" class="filter-btn mine-filter-btn" onclick="setFlowerClass('凡',this)">🌱 凡</button>
 </div>
 
 <select id="filterClass" onchange="renderCatalog()" style="display:none">
@@ -275,6 +275,14 @@ select:focus{
 <h3>🌸 按花朵查询</h3>
 <div class="hint">输入花名快速筛选，再选择花朵查看哪些成员拥有。</div>
 <input id="lookupFlowerSearch" type="search" placeholder="🔎 输入花名搜索" oninput="filterFlowerLookup()" autocomplete="off" style="width:100%;margin:10px 0">
+<div class="cute-filter" style="margin:8px 0 12px">
+  <button type="button" class="filter-btn lookup-filter-btn active" onclick="setLookupFlowerClass('',this)">🌸 全部</button>
+  <button type="button" class="filter-btn lookup-filter-btn" onclick="setLookupFlowerClass('仙',this)">✨ 仙</button>
+  <button type="button" class="filter-btn lookup-filter-btn" onclick="setLookupFlowerClass('华',this)">🌺 华</button>
+  <button type="button" class="filter-btn lookup-filter-btn" onclick="setLookupFlowerClass('珍',this)">💎 珍</button>
+  <button type="button" class="filter-btn lookup-filter-btn" onclick="setLookupFlowerClass('普',this)">🌼 普</button>
+  <button type="button" class="filter-btn lookup-filter-btn" onclick="setLookupFlowerClass('凡',this)">🌱 凡</button>
+</div>
 <select id="lookupFlower" onchange="renderFlowerOwners()" style="width:100%"></select>
 <div id="flowerOwnerSummary" class="status">请选择花朵</div>
 <div id="flowerOwnerResult"></div>
@@ -460,7 +468,7 @@ async function claimMember(){
 
 function setFlowerClass(category,btn){
   filterClass.value=category;
-  document.querySelectorAll('.filter-btn').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.mine-filter-btn').forEach(x=>x.classList.remove('active'));
   if(btn)btn.classList.add('active');
   renderCatalog();
 }
@@ -656,11 +664,37 @@ function renderLookup(){
 
   await loadAll();
 }
+let lookupFlowerCategoryFilter='';
+
+function setLookupFlowerClass(category,btn){
+ lookupFlowerCategoryFilter=category;
+ document.querySelectorAll('.lookup-filter-btn').forEach(x=>x.classList.remove('active'));
+ if(btn)btn.classList.add('active');
+ const old=lookupFlower?.value||'';
+ renderFlowerLookupOptions(old);
+ if(!lookupFlower.value){
+  flowerOwnerSummary.textContent='请选择花朵';
+  flowerOwnerResult.innerHTML='';
+ }else{
+  renderFlowerOwners();
+ }
+}
+
 function renderFlowerLookupOptions(selected=''){
  if(!window.lookupFlower)return;
  const q=(window.lookupFlowerSearch?.value||'').trim().toLowerCase();
- const list=flowers.filter(f=>!q||f.name.toLowerCase().includes(q));
- lookupFlower.innerHTML='<option value="">请选择花朵</option>'+list.map(f=>`<option value="${f.id}">${esc(f.name)}</option>`).join('');
+ const categoryOrder={'仙':0,'华':1,'珍':2,'普':3,'凡':4};
+ const list=flowers
+  .filter(f=>(!q||String(f.name||'').toLowerCase().includes(q))&&(!lookupFlowerCategoryFilter||f.category===lookupFlowerCategoryFilter))
+  .slice()
+  .sort((a,b)=>{
+    const ca=categoryOrder[a.category]??99, cb=categoryOrder[b.category]??99;
+    if(ca!==cb)return ca-cb;
+    const sa=Number(a.guild_score)||0, sb=Number(b.guild_score)||0;
+    if(sa!==sb)return sb-sa;
+    return String(a.name||'').localeCompare(String(b.name||''),'zh-CN');
+  });
+ lookupFlower.innerHTML='<option value="">请选择花朵</option>'+list.map(f=>`<option value="${f.id}">${esc(f.name)}｜${esc(f.category)}</option>`).join('');
  if([...lookupFlower.options].some(x=>x.value===selected))lookupFlower.value=selected;
 }
 function filterFlowerLookup(){
