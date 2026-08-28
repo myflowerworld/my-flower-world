@@ -325,6 +325,33 @@ select:focus{
 <div class="hint" style="margin-top:6px">照片文件名请与成员名字完全相同，例如：QQ.jpg、冬妹.png。找不到同名成员会自动跳过。</div>
 <div id="adminMembers"></div>
 
+<div style="margin-top:18px;padding:15px;border:1px dashed #f3a8c8;border-radius:16px;background:#fffafd">
+  <h3 style="margin-top:0">🌷 给成员添加花朵</h3>
+  <div class="row">
+    <select id="adminFlowerMember" onchange="renderAdminMemberFlowerOptions()">
+      <option value="">请选择成员</option>
+    </select>
+    <input id="adminMemberFlowerSearch" type="search" placeholder="🔎 输入花名搜索" oninput="renderAdminMemberFlowerOptions()" autocomplete="off">
+  </div>
+
+  <div class="cute-filter" style="margin:10px 0">
+    <button type="button" class="filter-btn admin-member-flower-filter active" onclick="setAdminMemberFlowerClass('',this)">🌸 全部</button>
+    <button type="button" class="filter-btn admin-member-flower-filter" onclick="setAdminMemberFlowerClass('仙',this)">✨ 仙</button>
+    <button type="button" class="filter-btn admin-member-flower-filter" onclick="setAdminMemberFlowerClass('华',this)">🌺 华</button>
+    <button type="button" class="filter-btn admin-member-flower-filter" onclick="setAdminMemberFlowerClass('珍',this)">💎 珍</button>
+    <button type="button" class="filter-btn admin-member-flower-filter" onclick="setAdminMemberFlowerClass('普',this)">🌼 普</button>
+    <button type="button" class="filter-btn admin-member-flower-filter" onclick="setAdminMemberFlowerClass('凡',this)">🌱 凡</button>
+  </div>
+
+  <div class="row">
+    <select id="adminMemberFlowerSelect">
+      <option value="">请选择花朵</option>
+    </select>
+    <button class="primary" onclick="adminAddFlowerToMember()">＋ 添加给成员</button>
+  </div>
+  <div class="hint" style="margin-top:6px">只显示该成员还没有拥有的花朵；添加后会立即保存到云端资料。</div>
+</div>
+
 <hr style="border:none;border-top:1px solid #eee;margin:22px 0">
 
 <h3>花花资料库</h3>
@@ -844,6 +871,79 @@ async function adminLogout(){
  }
  isAdmin=false;admins=[];adminUI();await loadAll()
 }
+let adminMemberFlowerCategoryFilter='';
+
+function renderAdminMemberFlowerSelectors(){
+  const memberSelect=document.getElementById('adminFlowerMember');
+  if(!memberSelect)return;
+  const oldMember=memberSelect.value;
+  memberSelect.innerHTML='<option value="">请选择成员</option>'+members.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  if([...memberSelect.options].some(x=>x.value===oldMember))memberSelect.value=oldMember;
+  renderAdminMemberFlowerOptions();
+}
+
+function setAdminMemberFlowerClass(category,btn){
+  adminMemberFlowerCategoryFilter=category;
+  document.querySelectorAll('.admin-member-flower-filter').forEach(x=>x.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderAdminMemberFlowerOptions();
+}
+
+function renderAdminMemberFlowerOptions(){
+  const memberSelect=document.getElementById('adminFlowerMember');
+  const flowerSelect=document.getElementById('adminMemberFlowerSelect');
+  const search=document.getElementById('adminMemberFlowerSearch');
+  if(!memberSelect||!flowerSelect)return;
+
+  const memberId=memberSelect.value;
+  const q=String(search?.value||'').trim().toLowerCase();
+  const oldFlower=flowerSelect.value;
+  const owned=new Set(
+    memberFlowers
+      .filter(x=>x.member_id===memberId && (x.quantity||0)>0)
+      .map(x=>x.flower_id)
+  );
+
+  const list=flowers.filter(f=>
+    (!memberId || !owned.has(f.id)) &&
+    (!q || String(f.name||'').toLowerCase().includes(q)) &&
+    (!adminMemberFlowerCategoryFilter || f.category===adminMemberFlowerCategoryFilter)
+  );
+
+  flowerSelect.innerHTML='<option value="">请选择花朵</option>'+list.map(f=>
+    `<option value="${f.id}">${esc(f.name)}｜${esc(f.category)}｜${Number(f.guild_score)||0}分</option>`
+  ).join('');
+
+  if([...flowerSelect.options].some(x=>x.value===oldFlower))flowerSelect.value=oldFlower;
+}
+
+async function adminAddFlowerToMember(){
+  if(!isAdmin)return alert('只有管理员可以执行这个操作');
+  const memberId=document.getElementById('adminFlowerMember')?.value||'';
+  const flowerId=document.getElementById('adminMemberFlowerSelect')?.value||'';
+  if(!memberId)return alert('请先选择成员');
+  if(!flowerId)return alert('请选择要添加的花朵');
+
+  const member=members.find(m=>m.id===memberId);
+  const flower=flowers.find(f=>f.id===flowerId);
+  if(!member||!flower)return alert('找不到成员或花朵资料');
+
+  const exists=memberFlowers.some(x=>x.member_id===memberId && x.flower_id===flowerId && (x.quantity||0)>0);
+  if(exists)return alert(`${member.name} 已经拥有 ${flower.name}`);
+
+  if(!confirm(`确定要把「${flower.name}」添加给成员「${member.name}」吗？`))return;
+
+  const r=await sb.from('member_flowers').upsert({
+    member_id:memberId,
+    flower_id:flowerId,
+    quantity:1
+  },{onConflict:'member_id,flower_id'});
+
+  if(r.error)return alert('添加失败：'+r.error.message);
+  await loadAll();
+  alert(`✅ 已把「${flower.name}」添加给「${member.name}」`);
+}
+
 async function adminAddMember(){
  const name=newMemberName.value.trim();if(!name)return;
  const r=await sb.from('members').insert({name,user_id:null});
@@ -1186,6 +1286,7 @@ if(table) table.style.display='block';
  function renderAdmin(){
   if(!isAdmin)return;
 adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>照片</th><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr><td>${m.image_url?`<img class="member-avatar" src="${esc(m.image_url)}" alt="${esc(m.name)}">`:'<div class="member-avatar-placeholder">🌷</div>'}</td><td>${esc(m.name)}</td><td><button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button></td></tr>`).join('')}</tbody></table></div>`;
+   renderAdminMemberFlowerSelectors();
    renderAdminFlowers();
  adminList.innerHTML=`<div class="table-wrap"><table><thead><tr><th>管理员邮箱</th><th>操作</th></tr></thead><tbody>${admins.map(a=>`<tr><td>${esc(a.email)}</td><td><button class="danger" onclick="adminDeleteAdmin('${a.id}','${esc(a.email)}')">移除</button></td></tr>`).join('')}</tbody></table></div>`
 }
