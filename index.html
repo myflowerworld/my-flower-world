@@ -350,6 +350,7 @@ select:focus{
     <button class="primary" onclick="adminAddFlowerToMember()">＋ 添加给成员</button>
   </div>
   <div class="hint" style="margin-top:6px">只显示该成员还没有拥有的花朵；添加后会立即保存到云端资料。</div>
+  <div id="adminMemberOwnedFlowers" style="margin-top:14px"></div>
 </div>
 
 <hr style="border:none;border-top:1px solid #eee;margin:22px 0">
@@ -915,6 +916,51 @@ function renderAdminMemberFlowerOptions(){
   ).join('');
 
   if([...flowerSelect.options].some(x=>x.value===oldFlower))flowerSelect.value=oldFlower;
+  renderAdminMemberOwnedFlowers();
+}
+
+function renderAdminMemberOwnedFlowers(){
+  const memberSelect=document.getElementById('adminFlowerMember');
+  const box=document.getElementById('adminMemberOwnedFlowers');
+  if(!box)return;
+
+  const memberId=memberSelect?.value||'';
+  if(!memberId){
+    box.innerHTML='<div class="hint">选择成员后，这里会显示该成员已经拥有的花朵，可直接移除错误添加的花。</div>';
+    return;
+  }
+
+  const member=members.find(m=>m.id===memberId);
+  const order={仙:0,华:1,珍:2,普:3,凡:4};
+  const rows=memberFlowers
+    .filter(x=>x.member_id===memberId && (x.quantity||0)>0)
+    .map(r=>({r,f:flowers.find(f=>f.id===r.flower_id)}))
+    .filter(x=>x.f)
+    .sort((a,b)=>
+      (order[a.f.category]??99)-(order[b.f.category]??99) ||
+      (Number(b.f.guild_score)||0)-(Number(a.f.guild_score)||0) ||
+      String(a.f.name||'').localeCompare(String(b.f.name||''),'zh-CN')
+    );
+
+  box.innerHTML=`
+    <div style="font-weight:700;margin:4px 0 8px">📝 ${esc(member?.name||'成员')} 已拥有 ${rows.length} 朵</div>
+    ${rows.length?`
+      <div class="table-wrap">
+        <table style="min-width:520px">
+          <thead><tr><th>花朵</th><th>分类</th><th>公会竞赛分</th><th>修改</th></tr></thead>
+          <tbody>
+            ${rows.map(x=>`
+              <tr>
+                <td style="text-align:left">${x.f.image_url?`<img src="${esc(x.f.image_url)}" style="width:46px;height:46px;object-fit:cover;border-radius:10px;vertical-align:middle;margin-right:8px">`:''}${esc(x.f.name)}</td>
+                <td>${esc(x.f.category)}</td>
+                <td>${Number(x.f.guild_score)||0}</td>
+                <td><button class="danger" onclick="adminRemoveMemberFlower('${memberId}','${x.f.id}')">移除</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`:'<div class="hint">这个成员目前还没有花朵记录。</div>'}
+  `;
 }
 
 async function adminAddFlowerToMember(){
