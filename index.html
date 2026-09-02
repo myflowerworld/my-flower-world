@@ -196,6 +196,35 @@ select:focus{
   border:3px solid #ffe0ed;
 }
 
+
+/* ===== 手机管理员快捷上传 ===== */
+.mobile-upload-box{
+  margin:16px 0 20px;
+  padding:16px;
+  border:1px dashed #f3a8c8;
+  border-radius:18px;
+  background:linear-gradient(135deg,#fff8fc,#f7fff8);
+}
+.mobile-upload-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  margin-top:12px;
+}
+.mobile-upload-card{
+  display:grid;
+  gap:9px;
+  padding:14px;
+  border:1px solid #f3e3eb;
+  border-radius:16px;
+  background:#fff;
+}
+.mobile-upload-card h4{margin:0;color:#c2417a}
+.mobile-upload-card input,.mobile-upload-card select,.mobile-upload-card button{width:100%}
+@media(max-width:700px){
+  .mobile-upload-grid{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -315,6 +344,37 @@ select:focus{
 <div class="admin-only">
 <h2>⚙️ 管理员</h2>
 <div class="adminBadge" id="adminEmailBadge"></div>
+
+<div class="mobile-upload-box">
+  <h3 style="margin-top:0">📱 手机快捷上传</h3>
+  <div class="hint">人在外地也可以直接用手机相册上传。电脑的文件夹批量上传功能继续保留。</div>
+
+  <div class="mobile-upload-grid">
+    <div class="mobile-upload-card">
+      <h4>🌸 上传一朵花</h4>
+      <input id="mobileFlowerName" placeholder="花名">
+      <select id="mobileFlowerClass">
+        <option value="仙">仙</option>
+        <option value="华">华</option>
+        <option value="珍">珍</option>
+        <option value="普">普</option>
+        <option value="凡">凡</option>
+      </select>
+      <input id="mobileFlowerScore" type="number" min="0" value="0" placeholder="公会竞赛分">
+      <input id="mobileFlowerImage" type="file" accept="image/*">
+      <button class="primary" onclick="adminMobileUploadFlower()">📱 从手机上传花朵</button>
+    </div>
+
+    <div class="mobile-upload-card">
+      <h4>👤 上传成员头像</h4>
+      <select id="mobileMemberAvatarSelect">
+        <option value="">请选择成员</option>
+      </select>
+      <input id="mobileMemberAvatarImage" type="file" accept="image/*">
+      <button class="primary" onclick="adminMobileUploadMemberAvatar()">📷 从手机上传头像</button>
+    </div>
+  </div>
+</div>
 
 <h3>成员管理</h3>
 <div class="row"><input id="newMemberName" placeholder="新增成员名字"><button class="primary" onclick="adminAddMember()">＋ 添加成员</button></div>
@@ -872,6 +932,14 @@ async function adminLogout(){
  }
  isAdmin=false;admins=[];adminUI();await loadAll()
 }
+function renderMobileMemberAvatarSelect(){
+  const sel=document.getElementById('mobileMemberAvatarSelect');
+  if(!sel)return;
+  const old=sel.value;
+  sel.innerHTML='<option value="">请选择成员</option>'+members.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  if([...sel.options].some(x=>x.value===old))sel.value=old;
+}
+
 let adminMemberFlowerCategoryFilter='';
 
 function renderAdminMemberFlowerSelectors(){
@@ -988,6 +1056,61 @@ async function adminAddFlowerToMember(){
   if(r.error)return alert('添加失败：'+r.error.message);
   await loadAll();
   alert(`✅ 已把「${flower.name}」添加给「${member.name}」`);
+}
+
+async function adminMobileUploadFlower(){
+  if(!isAdmin)return alert('只有管理员可以上传花朵');
+
+  const name=String(document.getElementById('mobileFlowerName')?.value||'').trim();
+  const category=document.getElementById('mobileFlowerClass')?.value||'珍';
+  const guild_score=Math.max(0,Number(document.getElementById('mobileFlowerScore')?.value)||0);
+  const file=document.getElementById('mobileFlowerImage')?.files?.[0];
+
+  if(!name)return alert('请输入花名');
+  if(!file)return alert('请从手机相册选择花朵图片');
+
+  const duplicate=flowers.some(f=>String(f.name||'').trim().toLowerCase()===name.toLowerCase());
+  if(duplicate&&!confirm(`花库已经有“${name}”。仍然继续新增吗？`))return;
+
+  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+  const path=`mobile-flowers/${crypto.randomUUID()}.${ext}`;
+  const up=await sb.storage.from('flower-images').upload(path,file,{upsert:false});
+  if(up.error)return alert('图片上传失败：'+up.error.message);
+
+  const image_url=sb.storage.from('flower-images').getPublicUrl(path).data.publicUrl;
+  const r=await sb.from('flowers').insert({name,category,guild_score,image_url});
+  if(r.error)return alert('新增花朵失败：'+r.error.message);
+
+  document.getElementById('mobileFlowerName').value='';
+  document.getElementById('mobileFlowerScore').value='0';
+  document.getElementById('mobileFlowerImage').value='';
+  await loadAll();
+  alert(`✅ 已成功上传：${name}`);
+}
+
+async function adminMobileUploadMemberAvatar(){
+  if(!isAdmin)return alert('只有管理员可以上传成员头像');
+
+  const memberId=document.getElementById('mobileMemberAvatarSelect')?.value||'';
+  const file=document.getElementById('mobileMemberAvatarImage')?.files?.[0];
+  if(!memberId)return alert('请先选择成员');
+  if(!file)return alert('请从手机相册选择成员照片');
+
+  const member=members.find(m=>m.id===memberId);
+  if(!member)return alert('找不到成员资料');
+
+  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+  const path=`member-avatars/${memberId}/${crypto.randomUUID()}.${ext}`;
+  const up=await sb.storage.from('flower-images').upload(path,file,{upsert:false});
+  if(up.error)return alert('头像上传失败：'+up.error.message);
+
+  const image_url=sb.storage.from('flower-images').getPublicUrl(path).data.publicUrl;
+  const r=await sb.from('members').update({image_url}).eq('id',memberId);
+  if(r.error)return alert('头像保存失败：'+r.error.message);
+
+  document.getElementById('mobileMemberAvatarImage').value='';
+  await loadAll();
+  alert(`✅ 已更新 ${member.name} 的头像`);
 }
 
 async function adminAddMember(){
@@ -1336,7 +1459,7 @@ adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>照片</th
    renderAdminFlowers();
  adminList.innerHTML=`<div class="table-wrap"><table><thead><tr><th>管理员邮箱</th><th>操作</th></tr></thead><tbody>${admins.map(a=>`<tr><td>${esc(a.email)}</td><td><button class="danger" onclick="adminDeleteAdmin('${a.id}','${esc(a.email)}')">移除</button></td></tr>`).join('')}</tbody></table></div>`
 }
-function renderAll(){renderIdentity();renderCatalog();renderMyOwned();renderLookupSelectors();renderLookup();renderFlowerOwners();renderAdmin();adminUI()}
+function renderAll(){renderIdentity();renderCatalog();renderMyOwned();renderLookupSelectors();renderLookup();renderFlowerOwners();renderMobileMemberAvatarSelect();renderAdmin();adminUI()}
 async function boot(){
  try{
   let {data:sessionData}=await sb.auth.getSession();
