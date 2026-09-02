@@ -612,40 +612,27 @@ ${owned.has(f.id)
 }
 async function addMine(flowerId){
   const mine=myMember();
-  if(!mine)return;
+  if(!mine)return alert('请先选择自己的成员名字');
 
-  let row=memberFlowers.find(
+  const r=await sb
+    .from('member_flowers')
+    .upsert({
+      member_id:mine.id,
+      flower_id:flowerId,
+      quantity:1
+    },{
+      onConflict:'member_id,flower_id'
+    });
+
+  if(r.error)return alert('添加失败：'+r.error.message);
+
+  const existing=memberFlowers.find(
     x=>x.member_id===mine.id && x.flower_id===flowerId
   );
 
-  let r;
-
-  if(row){
-    const newQty=(row.quantity||0)+1;
-
-    r=await sb
-      .from('member_flowers')
-      .update({quantity:newQty})
-      .eq('member_id',mine.id)
-      .eq('flower_id',flowerId);
-
-    if(r.error)return alert(r.error.message);
-
-    row.quantity=newQty;
-
+  if(existing){
+    existing.quantity=1;
   }else{
-    r=await sb
-      .from('member_flowers')
-      .upsert({
-        member_id:mine.id,
-        flower_id:flowerId,
-        quantity:1
-      },{
-        onConflict:'member_id,flower_id'
-      });
-
-    if(r.error)return alert(r.error.message);
-
     memberFlowers.push({
       member_id:mine.id,
       flower_id:flowerId,
@@ -653,8 +640,13 @@ async function addMine(flowerId){
     });
   }
 
-  renderAll();
+  // 只刷新成员相关区域，避免管理员新增功能影响成员添加流程
+  renderCatalog();
+  renderMyOwned();
+  renderLookup();
+  renderFlowerOwners();
 }
+
   async function changeQty(flowerId,delta){
  const mine=myMember();if(!mine)return;
  const row=memberFlowers.find(x=>x.member_id===mine.id&&x.flower_id===flowerId);if(!row)return;
