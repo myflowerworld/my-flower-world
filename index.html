@@ -739,6 +739,20 @@ function renderLookup(){
     rows=rows.filter(x=>x.f.category===category);
   }
 
+  // 成员花朵排序：仙 → 华 → 珍 → 普 → 凡；同分类按公会竞赛分从高到低
+  const categoryOrder={'仙':0,'华':1,'珍':2,'普':3,'凡':4};
+  rows.sort((a,b)=>{
+    const ca=categoryOrder[a.f.category]??99;
+    const cb=categoryOrder[b.f.category]??99;
+    if(ca!==cb)return ca-cb;
+
+    const sa=Number(a.f.guild_score)||0;
+    const sbScore=Number(b.f.guild_score)||0;
+    if(sa!==sbScore)return sbScore-sa;
+
+    return String(a.f.name||'').localeCompare(String(b.f.name||''),'zh-CN');
+  });
+
   lookupSummary.textContent=
     `正在查看：${m.name}${category ? '｜分类：'+category : ''}`;
 
