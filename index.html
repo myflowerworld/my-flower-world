@@ -1321,7 +1321,14 @@ if(!category){
   );
 }
 async function adminUpdateScore(id,v){
- const r=await sb.from('flowers').update({guild_score:Math.max(0,Number(v)||0)}).eq('id',id);if(r.error)return alert(r.error.message);await loadAll()
+  const score=Math.max(0,Number(v)||0);
+  const r=await sb.from('flowers').update({guild_score:score}).eq('id',id);
+  if(r.error)return alert(r.error.message);
+
+  // 只更新本地资料，不重新载入整个管理员页面。
+  // 这样连续修改分数时，当前打开的分类/文件夹不会被关闭。
+  const flower=flowers.find(f=>f.id===id);
+  if(flower)flower.guild_score=score;
 }
   async function adminUpdateFlowerName(id,name){
   name=String(name||'').trim();
