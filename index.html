@@ -597,7 +597,7 @@ function renderCatalog(){
  const owned=new Set(memberFlowers.filter(x=>x.member_id===mine.id&&x.quantity>0).map(x=>x.flower_id));
  const data=flowers.filter(f=>(!q||f.name.toLowerCase().includes(q))&&(!cat||f.category===cat));
  catalogGrid.innerHTML=data.map(f=>`<div class="flower">
- ${f.image_url?`<img src="${esc(f.image_url)}" alt="${esc(f.name)}">`:'<div class="noimg">🌼</div>'}
+ ${f.image_url?`<img loading="lazy" decoding="async" src="${esc(f.image_url)}" alt="${esc(f.name)}">`:'<div class="noimg">🌼</div>'}
  <b>${esc(f.name)}</b> <span class="tag">${esc(f.category)}</span>
  <div class="score">公会竞赛分：${f.guild_score||0}</div>
 ${owned.has(f.id)
@@ -761,7 +761,7 @@ function renderLookup(){
         rows.map(x=>`
           <div class="flower">
             ${x.f.image_url
-              ? `<img src="${esc(x.f.image_url)}" alt="${esc(x.f.name)}">`
+              ? `<img loading="lazy" decoding="async" src="${esc(x.f.image_url)}" alt="${esc(x.f.name)}">`
               : `<div class="noimg">🌼</div>`
             }
             <b>${esc(x.f.name)}</b>
@@ -854,6 +854,7 @@ function renderFlowerOwners(){
         ? `
         <div style="text-align:center;margin:18px 0;">
             <img
+                loading="lazy" decoding="async"
                 src="${esc(f.image_url)}"
                 alt="${esc(f.name)}"
                 style="
@@ -1025,7 +1026,7 @@ function renderAdminMemberOwnedFlowers(){
           <tbody>
             ${rows.map(x=>`
               <tr>
-                <td style="text-align:left">${x.f.image_url?`<img src="${esc(x.f.image_url)}" style="width:46px;height:46px;object-fit:cover;border-radius:10px;vertical-align:middle;margin-right:8px">`:''}${esc(x.f.name)}</td>
+                <td style="text-align:left">${x.f.image_url?`<img loading="lazy" decoding="async" src="${esc(x.f.image_url)}" style="width:46px;height:46px;object-fit:cover;border-radius:10px;vertical-align:middle;margin-right:8px">`:''}${esc(x.f.name)}</td>
                 <td>${esc(x.f.category)}</td>
                 <td>${Number(x.f.guild_score)||0}</td>
                 <td><button class="danger" onclick="adminRemoveMemberFlower('${memberId}','${x.f.id}')">移除</button></td>
@@ -1064,16 +1065,34 @@ async function adminAddFlowerToMember(){
   alert(`✅ 已把「${flower.name}」添加给「${member.name}」`);
 }
 
+async function compressImageForUpload(file,maxSide=1200,quality=.78){
+  if(!file || !file.type?.startsWith('image/')) return file;
+  try{
+    const bitmap=await createImageBitmap(file);
+    const scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
+    const w=Math.max(1,Math.round(bitmap.width*scale));
+    const h=Math.max(1,Math.round(bitmap.height*scale));
+    const canvas=document.createElement('canvas');
+    canvas.width=w;canvas.height=h;
+    canvas.getContext('2d').drawImage(bitmap,0,0,w,h);
+    bitmap.close?.();
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',quality));
+    if(!blob || blob.size>=file.size) return file;
+    return new File([blob],file.name.replace(/\.[^.]+$/,'.webp'),{type:'image/webp',lastModified:Date.now()});
+  }catch(e){console.warn('图片压缩失败，使用原图',e);return file}
+}
+
 async function adminMobileUploadFlower(){
   if(!isAdmin)return alert('只有管理员可以上传花朵');
 
   const name=String(document.getElementById('mobileFlowerName')?.value||'').trim();
   const category=document.getElementById('mobileFlowerClass')?.value||'珍';
   const guild_score=Math.max(0,Number(document.getElementById('mobileFlowerScore')?.value)||0);
-  const file=document.getElementById('mobileFlowerImage')?.files?.[0];
+  let file=document.getElementById('mobileFlowerImage')?.files?.[0];
 
   if(!name)return alert('请输入花名');
   if(!file)return alert('请从手机相册选择花朵图片');
+  file=await compressImageForUpload(file);
 
   const duplicate=flowers.some(f=>String(f.name||'').trim().toLowerCase()===name.toLowerCase());
   if(duplicate&&!confirm(`花库已经有“${name}”。仍然继续新增吗？`))return;
@@ -1098,9 +1117,10 @@ async function adminMobileUploadMemberAvatar(){
   if(!isAdmin)return alert('只有管理员可以上传成员头像');
 
   const memberId=document.getElementById('mobileMemberAvatarSelect')?.value||'';
-  const file=document.getElementById('mobileMemberAvatarImage')?.files?.[0];
+  let file=document.getElementById('mobileMemberAvatarImage')?.files?.[0];
   if(!memberId)return alert('请先选择成员');
   if(!file)return alert('请从手机相册选择成员照片');
+  file=await compressImageForUpload(file,900,.76);
 
   const member=members.find(m=>m.id===memberId);
   if(!member)return alert('找不到成员资料');
@@ -1413,7 +1433,7 @@ function renderAdminFlowers(keyword=''){
     onchange="adminUpdateFlowerName('${f.id}',this.value)"
   >
 </td>
-              <td>${f.image_url?`<img src="${esc(f.image_url)}" style="width:70px;height:70px;object-fit:cover;border-radius:10px;">`:'—'}</td>
+              <td>${f.image_url?`<img loading="lazy" decoding="async" src="${esc(f.image_url)}" style="width:70px;height:70px;object-fit:cover;border-radius:10px;">`:'—'}</td>
               <td>${esc(f.category)}</td>
               <td>
                 <input style="width:90px" type="number" min="0"
@@ -1467,7 +1487,7 @@ if(table) table.style.display='block';
 }
  function renderAdmin(){
   if(!isAdmin)return;
-adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>照片</th><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr><td>${m.image_url?`<img class="member-avatar" src="${esc(m.image_url)}" alt="${esc(m.name)}">`:'<div class="member-avatar-placeholder">🌷</div>'}</td><td>${esc(m.name)}</td><td><button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button></td></tr>`).join('')}</tbody></table></div>`;
+adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>照片</th><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr><td>${m.image_url?`<img class="member-avatar" loading="lazy" decoding="async" src="${esc(m.image_url)}" alt="${esc(m.name)}">`:'<div class="member-avatar-placeholder">🌷</div>'}</td><td>${esc(m.name)}</td><td><button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button></td></tr>`).join('')}</tbody></table></div>`;
    renderAdminMemberFlowerSelectors();
    renderAdminFlowers();
  adminList.innerHTML=`<div class="table-wrap"><table><thead><tr><th>管理员邮箱</th><th>操作</th></tr></thead><tbody>${admins.map(a=>`<tr><td>${esc(a.email)}</td><td><button class="danger" onclick="adminDeleteAdmin('${a.id}','${esc(a.email)}')">移除</button></td></tr>`).join('')}</tbody></table></div>`
