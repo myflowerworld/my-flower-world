@@ -174,27 +174,6 @@ select:focus{
   .filter-btn{width:100%;padding:9px 8px}
 }
 
-/* ===== 成员头像 ===== */
-.member-avatar{
-  width:58px;
-  height:58px;
-  object-fit:cover;
-  border-radius:50%;
-  border:3px solid #ffe0ed;
-  background:#fff7fb;
-  box-shadow:0 3px 10px rgba(232,93,158,.12);
-}
-.member-avatar-placeholder{
-  width:58px;
-  height:58px;
-  border-radius:50%;
-  display:grid;
-  place-items:center;
-  margin:auto;
-  font-size:28px;
-  background:#fff1f7;
-  border:3px solid #ffe0ed;
-}
 
 
 /* ===== 手机管理员快捷上传 ===== */
@@ -364,25 +343,11 @@ select:focus{
       <input id="mobileFlowerImage" type="file" accept="image/*">
       <button class="primary" onclick="adminMobileUploadFlower()">📱 从手机上传花朵</button>
     </div>
-
-    <div class="mobile-upload-card">
-      <h4>👤 上传成员头像</h4>
-      <select id="mobileMemberAvatarSelect">
-        <option value="">请选择成员</option>
-      </select>
-      <input id="mobileMemberAvatarImage" type="file" accept="image/*">
-      <button class="primary" onclick="adminMobileUploadMemberAvatar()">📷 从手机上传头像</button>
-    </div>
   </div>
 </div>
 
 <h3>成员管理</h3>
 <div class="row"><input id="newMemberName" placeholder="新增成员名字"><button class="primary" onclick="adminAddMember()">＋ 添加成员</button></div>
-<div class="row" style="margin-top:12px">
-  <input id="batchMemberImages" type="file" accept="image/*" multiple webkitdirectory>
-  <button class="primary" onclick="adminBatchUploadMemberImages()">📁 批量上传成员照片</button>
-</div>
-<div class="hint" style="margin-top:6px">照片文件名请与成员名字完全相同，例如：QQ.jpg、冬妹.png。找不到同名成员会自动跳过。</div>
 <div id="adminMembers"></div>
 
 <div style="margin-top:18px;padding:15px;border:1px dashed #f3a8c8;border-radius:16px;background:#fffafd">
@@ -939,13 +904,6 @@ async function adminLogout(){
  }
  isAdmin=false;admins=[];adminUI();await loadAll()
 }
-function renderMobileMemberAvatarSelect(){
-  const sel=document.getElementById('mobileMemberAvatarSelect');
-  if(!sel)return;
-  const old=sel.value;
-  sel.innerHTML='<option value="">请选择成员</option>'+members.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
-  if([...sel.options].some(x=>x.value===old))sel.value=old;
-}
 
 let adminMemberFlowerCategoryFilter='';
 
@@ -1113,31 +1071,6 @@ async function adminMobileUploadFlower(){
   alert(`✅ 已成功上传：${name}`);
 }
 
-async function adminMobileUploadMemberAvatar(){
-  if(!isAdmin)return alert('只有管理员可以上传成员头像');
-
-  const memberId=document.getElementById('mobileMemberAvatarSelect')?.value||'';
-  let file=document.getElementById('mobileMemberAvatarImage')?.files?.[0];
-  if(!memberId)return alert('请先选择成员');
-  if(!file)return alert('请从手机相册选择成员照片');
-  file=await compressImageForUpload(file,900,.76);
-
-  const member=members.find(m=>m.id===memberId);
-  if(!member)return alert('找不到成员资料');
-
-  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
-  const path=`member-avatars/${memberId}/${crypto.randomUUID()}.${ext}`;
-  const up=await sb.storage.from('flower-images').upload(path,file,{upsert:false});
-  if(up.error)return alert('头像上传失败：'+up.error.message);
-
-  const image_url=sb.storage.from('flower-images').getPublicUrl(path).data.publicUrl;
-  const r=await sb.from('members').update({image_url}).eq('id',memberId);
-  if(r.error)return alert('头像保存失败：'+r.error.message);
-
-  document.getElementById('mobileMemberAvatarImage').value='';
-  await loadAll();
-  alert(`✅ 已更新 ${member.name} 的头像`);
-}
 
 async function adminAddMember(){
  const name=newMemberName.value.trim();if(!name)return;
@@ -1149,77 +1082,6 @@ async function adminDeleteMember(id){
  const r=await sb.from('members').delete().eq('id',id);if(r.error)return alert(r.error.message);await loadAll()
 }
 
-async function adminBatchUploadMemberImages(){
-  if(!isAdmin)return alert('只有管理员可以批量上传成员照片');
-
-  const files=[...(batchMemberImages.files||[])]
-    .filter(file=>file.type && file.type.startsWith('image/'));
-
-  if(!files.length)return alert('请选择成员照片文件夹');
-
-  if(!confirm(`准备处理 ${files.length} 张成员照片。系统会用图片文件名寻找同名成员，例如“冬妹.jpg”会匹配成员“冬妹”。确定继续吗？`))return;
-
-  let success=0;
-  let skipped=0;
-  let failed=0;
-  const skippedNames=[];
-
-  const memberMap=new Map(
-    members.map(m=>[String(m.name||'').trim().toLowerCase(),m])
-  );
-
-  for(const file of files){
-    try{
-      const name=file.name.replace(/\.[^.]+$/,'').trim();
-      const member=memberMap.get(name.toLowerCase());
-
-      if(!member){
-        skipped++;
-        skippedNames.push(name);
-        continue;
-      }
-
-      const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
-      const path=`member-avatars/${member.id}/${crypto.randomUUID()}.${ext}`;
-
-      const up=await sb.storage.from('flower-images').upload(path,file,{upsert:false});
-      if(up.error){
-        console.error('成员照片上传失败：',name,up.error);
-        failed++;
-        continue;
-      }
-
-      const image_url=sb.storage
-        .from('flower-images')
-        .getPublicUrl(path).data.publicUrl;
-
-      const r=await sb.from('members')
-        .update({image_url})
-        .eq('id',member.id);
-
-      if(r.error){
-        console.error('成员照片资料更新失败：',name,r.error);
-        failed++;
-        continue;
-      }
-
-      member.image_url=image_url;
-      success++;
-    }catch(err){
-      console.error(err);
-      failed++;
-    }
-  }
-
-  batchMemberImages.value='';
-  await loadAll();
-
-  let msg=`成员照片批量上传完成！\n\n✅ 成功：${success} 张\n⏭️ 找不到同名成员：${skipped} 张\n❌ 失败：${failed} 张`;
-  if(skippedNames.length){
-    msg+=`\n\n未匹配：${skippedNames.slice(0,20).join('、')}${skippedNames.length>20?'……':''}`;
-  }
-  alert(msg);
-}
 async function adminAddFlower(){
  const name=newFlowerName.value.trim();if(!name)return alert('请输入花名');
  let image_url=null;
@@ -1487,12 +1349,12 @@ if(table) table.style.display='block';
 }
  function renderAdmin(){
   if(!isAdmin)return;
-adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>照片</th><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr><td>${m.image_url?`<img class="member-avatar" loading="lazy" decoding="async" src="${esc(m.image_url)}" alt="${esc(m.name)}">`:'<div class="member-avatar-placeholder">🌷</div>'}</td><td>${esc(m.name)}</td><td><button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button></td></tr>`).join('')}</tbody></table></div>`;
+adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr><td>${esc(m.name)}</td><td><button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button></td></tr>`).join('')}</tbody></table></div>`;
    renderAdminMemberFlowerSelectors();
    renderAdminFlowers();
  adminList.innerHTML=`<div class="table-wrap"><table><thead><tr><th>管理员邮箱</th><th>操作</th></tr></thead><tbody>${admins.map(a=>`<tr><td>${esc(a.email)}</td><td><button class="danger" onclick="adminDeleteAdmin('${a.id}','${esc(a.email)}')">移除</button></td></tr>`).join('')}</tbody></table></div>`
 }
-function renderAll(){renderIdentity();renderCatalog();renderMyOwned();renderLookupSelectors();renderLookup();renderFlowerOwners();renderMobileMemberAvatarSelect();renderAdmin();adminUI()}
+function renderAll(){renderIdentity();renderCatalog();renderMyOwned();renderLookupSelectors();renderLookup();renderFlowerOwners();renderAdmin();adminUI()}
 async function boot(){
  try{
   let {data:sessionData}=await sb.auth.getSession();
