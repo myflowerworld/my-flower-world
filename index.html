@@ -204,6 +204,20 @@ select:focus{
   .mobile-upload-grid{grid-template-columns:1fr}
 }
 
+
+/* ===== 花朵分批加载 ===== */
+.catalog-load-more{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:10px;
+  margin-top:14px;
+  flex-wrap:wrap;
+}
+.catalog-load-more .hint{
+  font-size:13px;
+}
+
 </style>
 </head>
 <body>
@@ -279,6 +293,7 @@ select:focus{
 </select>
 </div>
 <div id="catalogGrid" class="grid" style="margin-top:14px"></div>
+<div id="catalogLoadMore" class="catalog-load-more"></div>
 
 <h2 style="margin-top:22px">我已拥有</h2>
 <div id="myOwned"></div>
@@ -555,31 +570,84 @@ async function claimMember(){
  renderAll();
 }
 
+const CATALOG_PAGE_SIZE=30;
+let catalogVisibleCount=CATALOG_PAGE_SIZE;
+let catalogLastQuery='';
+let catalogLastCategory='';
+
 function setFlowerClass(category,btn){
   filterClass.value=category;
   document.querySelectorAll('.mine-filter-btn').forEach(x=>x.classList.remove('active'));
   if(btn)btn.classList.add('active');
+  catalogVisibleCount=CATALOG_PAGE_SIZE;
+  catalogLastCategory=category;
   renderCatalog();
 }
 
-function renderCatalog(){
- // Guard against browser password-manager/autofill putting the signed-in email in this unrelated search box.
- if(sessionUser?.email && searchFlower.value.trim().toLowerCase()===sessionUser.email.trim().toLowerCase()) searchFlower.value='';
- const q=searchFlower.value.trim().toLowerCase(),cat=filterClass.value,mine=myMember();
- if(!mine){catalogGrid.innerHTML='';return}
- const owned=new Set(memberFlowers.filter(x=>x.member_id===mine.id&&x.quantity>0).map(x=>x.flower_id));
- const data=flowers.filter(f=>(!q||f.name.toLowerCase().includes(q))&&(!cat||f.category===cat));
- catalogGrid.innerHTML=data.map(f=>`<div class="flower">
- ${f.image_url?`<img loading="lazy" decoding="async" src="${esc(f.image_url)}" alt="${esc(f.name)}">`:'<div class="noimg">🌼</div>'}
- <b>${esc(f.name)}</b> <span class="tag">${esc(f.category)}</span>
- <div class="score">公会竞赛分：${f.guild_score||0}</div>
-${owned.has(f.id)
-? `<div style="display:flex;gap:6px;margin-top:8px">
-    <button class="secondary" style="flex:1" disabled>✓ 已拥有</button>
-    <button class="danger" style="flex:1" onclick="removeMyFlower('${f.id}')">🗑 删除</button>
-   </div>`
-: `<button class="primary" style="width:100%;margin-top:8px" onclick="addMine('${f.id}')">＋ 添加这朵花</button>`
+function loadMoreCatalog(){
+  catalogVisibleCount+=CATALOG_PAGE_SIZE;
+  renderCatalog(false);
+}
 
+function renderCatalog(resetIfChanged=true){
+  // Guard against browser password-manager/autofill putting the signed-in email in this unrelated search box.
+  if(sessionUser?.email && searchFlower.value.trim().toLowerCase()===sessionUser.email.trim().toLowerCase()) searchFlower.value='';
+
+  const q=searchFlower.value.trim().toLowerCase();
+  const cat=filterClass.value;
+  const mine=myMember();
+
+  if(!mine){
+    catalogGrid.innerHTML='';
+    if(window.catalogLoadMore)catalogLoadMore.innerHTML='';
+    return;
+  }
+
+  if(resetIfChanged && (q!==catalogLastQuery || cat!==catalogLastCategory)){
+    catalogVisibleCount=CATALOG_PAGE_SIZE;
+  }
+  catalogLastQuery=q;
+  catalogLastCategory=cat;
+
+  const owned=new Set(
+    memberFlowers
+      .filter(x=>x.member_id===mine.id&&x.quantity>0)
+      .map(x=>x.flower_id)
+  );
+
+  const data=flowers.filter(f=>
+    (!q||String(f.name||'').toLowerCase().includes(q)) &&
+    (!cat||f.category===cat)
+  );
+
+  const visible=data.slice(0,catalogVisibleCount);
+
+  catalogGrid.innerHTML=visible.map(f=>`<div class="flower">
+    ${f.image_url?`<img loading="lazy" decoding="async" src="${esc(f.image_url)}" alt="${esc(f.name)}">`:'<div class="noimg">🌼</div>'}
+    <b>${esc(f.name)}</b> <span class="tag">${esc(f.category)}</span>
+    <div class="score">公会竞赛分：${f.guild_score||0}</div>
+    ${owned.has(f.id)
+      ? `<div style="display:flex;gap:6px;margin-top:8px">
+          <button class="secondary" style="flex:1" disabled>✓ 已拥有</button>
+          <button class="danger" style="flex:1" onclick="removeMyFlower('${f.id}')">🗑 删除</button>
+        </div>`
+      : `<button class="primary" style="width:100%;margin-top:8px" onclick="addMine('${f.id}')">＋ 添加这朵花</button>`
+    }
+  </div>`).join('') || '<div class="hint">没有找到花</div>';
+
+  const loadBox=document.getElementById('catalogLoadMore');
+  if(loadBox){
+    if(data.length>visible.length){
+      loadBox.innerHTML=`
+        <span class="hint">已显示 ${visible.length} / ${data.length} 朵</span>
+        <button class="secondary" onclick="loadMoreCatalog()">🌷 再显示 ${Math.min(CATALOG_PAGE_SIZE,data.length-visible.length)} 朵</button>
+      `;
+    }else if(data.length){
+      loadBox.innerHTML=`<span class="hint">已显示全部 ${data.length} 朵</span>`;
+    }else{
+      loadBox.innerHTML='';
+    }
+  }
 }
  </div>`).join('')||'<div class="hint">没有找到花</div>'
 }
