@@ -395,6 +395,14 @@ select:focus{
  <button class="primary" onclick="adminBatchAddFlowers()">📁 批量上传花花</button>
 </div>
 <div class="hint">只有管理员可以上传图片及修改公会竞赛分。</div>
+
+<div style="margin:14px 0;padding:14px;border:1px dashed #f3a8c8;border-radius:16px;background:#fffafd">
+  <h3 style="margin:0 0 8px">🪄 旧花图省流量处理</h3>
+  <div class="hint">一次处理 20 张旧图片：压缩为较小 WebP、更新花朵网址，并在确认新图保存成功后删除旧的 Supabase Storage 原图。可重复点击直到剩余 0 张。</div>
+  <div id="oldImageOptimizeStatus" class="status" style="margin:10px 0">正在统计旧图片...</div>
+  <button id="optimizeOldImagesBtn" class="primary" onclick="adminOptimizeOldFlowerImagesBatch()">🪄 压缩下一批 20 张</button>
+</div>
+
 <div id="adminFlowers"></div>
 
 <hr style="border:none;border-top:1px solid #eee;margin:22px 0">
@@ -1040,6 +1048,79 @@ async function compressImageForUpload(file,maxSide=1200,quality=.78){
   }catch(e){console.warn('图片压缩失败，使用原图',e);return file}
 }
 
+
+
+function getFlowerStoragePathFromPublicUrl(url){
+  try{
+    const marker='/storage/v1/object/public/flower-images/';
+    const i=String(url||'').indexOf(marker);
+    if(i<0)return '';
+    return decodeURIComponent(String(url).slice(i+marker.length).split('?')[0]);
+  }catch(e){return ''}
+}
+
+async function compressRemoteImageToWebp(url,maxSide=720,quality=.70){
+  const res=await fetch(url,{cache:'no-store'});
+  if(!res.ok)throw new Error('下载旧图失败：HTTP '+res.status);
+  const blob=await res.blob();
+  const bitmap=await createImageBitmap(blob);
+  const scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
+  const w=Math.max(1,Math.round(bitmap.width*scale));
+  const h=Math.max(1,Math.round(bitmap.height*scale));
+  const canvas=document.createElement('canvas');
+  canvas.width=w;canvas.height=h;
+  canvas.getContext('2d').drawImage(bitmap,0,0,w,h);
+  bitmap.close?.();
+  const out=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',quality));
+  if(!out)throw new Error('图片压缩失败');
+  return out;
+}
+
+function refreshOldImageOptimizeStatus(){
+  const box=document.getElementById('oldImageOptimizeStatus');
+  if(!box)return;
+  const remaining=flowers.filter(f=>f.image_url && !String(f.image_url).includes('/optimized-flowers/')).length;
+  box.textContent=remaining>0?`尚有 ${remaining} 张旧花图未压缩`:'✅ 所有花图都已完成省流量处理';
+}
+
+async function adminOptimizeOldFlowerImagesBatch(){
+  if(!isAdmin)return alert('只有管理员可以执行这个操作');
+  const btn=document.getElementById('optimizeOldImagesBtn');
+  const box=document.getElementById('oldImageOptimizeStatus');
+  const targets=flowers.filter(f=>f.image_url && !String(f.image_url).includes('/optimized-flowers/')).slice(0,20);
+  if(!targets.length){refreshOldImageOptimizeStatus();return alert('✅ 所有旧花图都已经处理完成');}
+  if(!confirm(`这次会处理 ${targets.length} 张旧花图。过程中会下载一次旧图、上传压缩版并更新资料。确定继续吗？`))return;
+  if(btn)btn.disabled=true;
+  let success=0,failed=0,deleted=0;
+  for(let i=0;i<targets.length;i++){
+    const f=targets[i];
+    try{
+      if(box)box.textContent=`处理中 ${i+1}/${targets.length}：${f.name}`;
+      const oldUrl=f.image_url;
+      const oldPath=getFlowerStoragePathFromPublicUrl(oldUrl);
+      const blob=await compressRemoteImageToWebp(oldUrl,720,.70);
+      const newPath=`optimized-flowers/${f.id}.webp`;
+      const up=await sb.storage.from('flower-images').upload(newPath,blob,{contentType:'image/webp',upsert:true,cacheControl:'31536000'});
+      if(up.error)throw up.error;
+      const newUrl=sb.storage.from('flower-images').getPublicUrl(newPath).data.publicUrl;
+      const r=await sb.from('flowers').update({image_url:newUrl}).eq('id',f.id);
+      if(r.error)throw r.error;
+      f.image_url=newUrl;
+      if(oldPath && oldPath!==newPath && !oldPath.startsWith('optimized-flowers/')){
+        const del=await sb.storage.from('flower-images').remove([oldPath]);
+        if(!del.error)deleted++;
+      }
+      success++;
+    }catch(e){
+      console.error('旧花图处理失败',f?.name,e);
+      failed++;
+    }
+  }
+  if(btn)btn.disabled=false;
+  refreshOldImageOptimizeStatus();
+  renderCatalog();renderLookup();renderFlowerLookupOptions(lookupFlower?.value||'');renderAdminFlowers();
+  alert(`本批完成！\n✅ 成功：${success} 张\n🗑 已删除旧原图：${deleted} 张\n❌ 失败：${failed} 张\n\n可继续点击“压缩下一批 20 张”。`);
+}
 async function adminMobileUploadFlower(){
   if(!isAdmin)return alert('只有管理员可以上传花朵');
 
@@ -1085,11 +1166,12 @@ async function adminDeleteMember(id){
 async function adminAddFlower(){
  const name=newFlowerName.value.trim();if(!name)return alert('请输入花名');
  let image_url=null;
- const file=newFlowerImage.files[0];
+ let file=newFlowerImage.files[0];
  if(file){
-  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
-  const path=`${crypto.randomUUID()}.${ext}`;
-  const up=await sb.storage.from('flower-images').upload(path,file);
+  file=await compressImageForUpload(file,720,.70);
+  const ext=(file.name.split('.').pop()||'webp').toLowerCase();
+  const path=`optimized-flowers/${crypto.randomUUID()}.${ext}`;
+  const up=await sb.storage.from('flower-images').upload(path,file,{cacheControl:'31536000'});
   if(up.error)return alert('图片上传失败：'+up.error.message);
   image_url=sb.storage.from('flower-images').getPublicUrl(path).data.publicUrl
  }
@@ -1115,7 +1197,7 @@ async function adminAddFlower(){
     flowers.map(f=>String(f.name||'').trim().toLowerCase())
   );
 
-  for(const file of files){
+  for(let file of files){
     try{
       // 根据所选文件夹名称自动判断分类
 const relativePath = file.webkitRelativePath || '';
@@ -1151,11 +1233,12 @@ if(!category){
         continue;
       }
 
-      const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
-      const path=`${crypto.randomUUID()}.${ext}`;
+      file=await compressImageForUpload(file,720,.70);
+      const ext=(file.name.split('.').pop()||'webp').toLowerCase();
+      const path=`optimized-flowers/${crypto.randomUUID()}.${ext}`;
 
       // 1. 上传图片到 Supabase Storage
-      const up=await sb.storage.from('flower-images').upload(path,file);
+      const up=await sb.storage.from('flower-images').upload(path,file,{cacheControl:'31536000'});
 
       if(up.error){
         console.error('图片上传失败：',name,up.error);
@@ -1352,6 +1435,7 @@ if(table) table.style.display='block';
 adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr><td>${esc(m.name)}</td><td><button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button></td></tr>`).join('')}</tbody></table></div>`;
    renderAdminMemberFlowerSelectors();
    renderAdminFlowers();
+   refreshOldImageOptimizeStatus();
  adminList.innerHTML=`<div class="table-wrap"><table><thead><tr><th>管理员邮箱</th><th>操作</th></tr></thead><tbody>${admins.map(a=>`<tr><td>${esc(a.email)}</td><td><button class="danger" onclick="adminDeleteAdmin('${a.id}','${esc(a.email)}')">移除</button></td></tr>`).join('')}</tbody></table></div>`
 }
 function renderAll(){renderIdentity();renderCatalog();renderMyOwned();renderLookupSelectors();renderLookup();renderFlowerOwners();renderAdmin();adminUI()}
