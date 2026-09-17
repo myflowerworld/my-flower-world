@@ -1125,7 +1125,7 @@ async function uploadImageToR2(file,folder='flowers'){
     headers:{
       'Authorization':`Bearer ${token}`,
       'Content-Type':file.type||'application/octet-stream',
-      'X-Filename':file.name||'image.webp',
+      'X-Filename':encodeURIComponent(file.name||'image.webp'),
       'X-Folder':folder
     },
     body:file
