@@ -1183,6 +1183,26 @@ async function adminAddMember(){
  if(r.error)return alert(r.error.message);newMemberName.value='';await loadAll()
 }
 
+async function adminPromptRenameMember(id){
+  if(!isAdmin)return alert('只有管理员可以修改成员名字');
+
+  const member=members.find(m=>m.id===id);
+  if(!member)return alert('找不到这个成员');
+
+  const oldName=String(member.name||'');
+  const newName=prompt(`修改成员名称\n\n原名称：${oldName}\n\n请输入新名称：`, oldName);
+
+  if(newName===null)return;
+
+  const cleaned=String(newName||'').trim();
+  if(!cleaned)return alert('成员名字不能为空');
+  if(cleaned===oldName)return;
+
+  if(!confirm(`确定修改成员名称吗？\n\n${oldName}  →  ${cleaned}\n\n成员原本拥有的花朵记录会保留。`))return;
+
+  await adminUpdateMemberName(id,cleaned);
+}
+
 async function adminUpdateMemberName(id,name){
   if(!isAdmin)return alert('只有管理员可以修改成员名字');
 
@@ -1502,15 +1522,11 @@ if(table) table.style.display='block';
  function renderAdmin(){
   if(!isAdmin)return;
 adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr>
+<td>${esc(m.name)}</td>
 <td>
-  <input
-    type="text"
-    value="${esc(m.name)}"
-    style="width:min(260px,100%)"
-    onchange="adminUpdateMemberName('${m.id}',this.value)"
-  >
+  <button onclick="adminPromptRenameMember('${m.id}')">✏️ 修改</button>
+  <button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button>
 </td>
-<td><button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button></td>
 </tr>`).join('')}</tbody></table></div>`;
    renderAdminMemberFlowerSelectors();
    renderAdminFlowers();
