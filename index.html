@@ -409,13 +409,13 @@ select:focus{
   <input id="batchRareFlowerImages" type="file" accept="image/*" multiple webkitdirectory>
  <button class="primary" onclick="adminBatchAddFlowers()">📁 批量上传花花</button>
 </div>
-<div class="hint">只有管理员可以上传图片及修改公会竞赛分。</div>
+<div class="hint">只有管理员可以上传图片及修改公会竞赛分。新上传的图片会存入 Cloudflare R2；成员、花名、分类、分数和成员拥有记录继续保存在 Supabase。</div>
 
 <div style="margin:14px 0;padding:14px;border:1px dashed #f3a8c8;border-radius:16px;background:#fffafd">
-  <h3 style="margin:0 0 8px">🪄 旧花图省流量处理</h3>
-  <div class="hint">一次处理 20 张旧图片：压缩为较小 WebP、更新花朵网址，并在确认新图保存成功后删除旧的 Supabase Storage 原图。可重复点击直到剩余 0 张。</div>
+  <h3 style="margin:0 0 8px">🪄 旧花图省流量处理（暂时锁定）</h3>
+  <div class="hint">⚠️ 旧花图暂时保持原样，不会删除、不迁移。等 R2 新上传功能确认稳定后，再单独处理旧图。</div>
   <div id="oldImageOptimizeStatus" class="status" style="margin:10px 0">正在统计旧图片...</div>
-  <button id="optimizeOldImagesBtn" class="primary" onclick="adminOptimizeOldFlowerImagesBatch()">🪄 压缩下一批 20 张</button>
+  <button id="optimizeOldImagesBtn" class="secondary" disabled>🔒 暂停处理旧花图</button>
 </div>
 
 <div id="adminFlowers"></div>
@@ -451,6 +451,7 @@ select:focus{
 <script>
 const SUPABASE_URL = 'https://vkilecxzwmhbfuybbcrh.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_k6e8rAKC6CAtgOMMJctSwg_o0e9_7Pe';
+const R2_UPLOAD_WORKER_URL = 'https://pingan-flower-upload.elynwws2003.workers.dev/';
 </script>
 <script>
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
@@ -1115,6 +1116,38 @@ async function compressImageForUpload(file,maxSide=1200,quality=.78){
 }
 
 
+async function uploadImageToR2(file,folder='flowers'){
+  if(!isAdmin)throw new Error('只有管理员可以上传图片');
+  if(!file)throw new Error('没有选择图片');
+
+  const {data,error}=await sb.auth.getSession();
+  if(error)throw error;
+
+  const token=data.session?.access_token;
+  if(!token)throw new Error('管理员登录状态已失效，请重新登录');
+
+  const res=await fetch(R2_UPLOAD_WORKER_URL,{
+    method:'POST',
+    headers:{
+      'Authorization':`Bearer ${token}`,
+      'Content-Type':file.type||'application/octet-stream',
+      'X-Filename':file.name||'image.webp',
+      'X-Folder':folder
+    },
+    body:file
+  });
+
+  let payload={};
+  try{payload=await res.json()}catch(e){}
+
+  if(!res.ok || !payload?.success || !payload?.url){
+    throw new Error(payload?.error || `R2 上传失败：HTTP ${res.status}`);
+  }
+
+  return payload;
+}
+
+
 
 function getFlowerStoragePathFromPublicUrl(url){
   try{
@@ -1197,25 +1230,27 @@ async function adminMobileUploadFlower(){
 
   if(!name)return alert('请输入花名');
   if(!file)return alert('请从手机相册选择花朵图片');
-  file=await compressImageForUpload(file);
 
   const duplicate=flowers.some(f=>String(f.name||'').trim().toLowerCase()===name.toLowerCase());
   if(duplicate&&!confirm(`花库已经有“${name}”。仍然继续新增吗？`))return;
 
-  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
-  const path=`mobile-flowers/${crypto.randomUUID()}.${ext}`;
-  const up=await sb.storage.from('flower-images').upload(path,file,{upsert:false});
-  if(up.error)return alert('图片上传失败：'+up.error.message);
+  try{
+    file=await compressImageForUpload(file,720,.70);
+    const uploaded=await uploadImageToR2(file,'mobile-flowers');
+    const image_url=uploaded.url;
 
-  const image_url=sb.storage.from('flower-images').getPublicUrl(path).data.publicUrl;
-  const r=await sb.from('flowers').insert({name,category,guild_score,image_url});
-  if(r.error)return alert('新增花朵失败：'+r.error.message);
+    const r=await sb.from('flowers').insert({name,category,guild_score,image_url});
+    if(r.error)throw r.error;
 
-  document.getElementById('mobileFlowerName').value='';
-  document.getElementById('mobileFlowerScore').value='0';
-  document.getElementById('mobileFlowerImage').value='';
-  await loadAll();
-  alert(`✅ 已成功上传：${name}`);
+    document.getElementById('mobileFlowerName').value='';
+    document.getElementById('mobileFlowerScore').value='0';
+    document.getElementById('mobileFlowerImage').value='';
+    await loadAll();
+    alert(`✅ 已成功上传到 Cloudflare R2：${name}`);
+  }catch(e){
+    console.error(e);
+    alert('上传失败：'+(e?.message||String(e)));
+  }
 }
 
 
@@ -1224,28 +1259,78 @@ async function adminAddMember(){
  const r=await sb.from('members').insert({name,user_id:null});
  if(r.error)return alert(r.error.message);newMemberName.value='';await loadAll()
 }
+
+async function adminUpdateMemberName(id,name){
+  if(!isAdmin)return alert('只有管理员可以修改成员名字');
+
+  name=String(name||'').trim();
+  if(!name){
+    alert('成员名字不能为空');
+    await loadAll();
+    return;
+  }
+
+  const duplicate=members.some(m=>m.id!==id && String(m.name||'').trim().toLowerCase()===name.toLowerCase());
+  if(duplicate){
+    alert('已经有相同的成员名字，请换一个名字');
+    await loadAll();
+    return;
+  }
+
+  const r=await sb.from('members').update({name}).eq('id',id);
+  if(r.error){
+    alert('修改成员名字失败：'+r.error.message);
+    await loadAll();
+    return;
+  }
+
+  const member=members.find(m=>m.id===id);
+  if(member)member.name=name;
+
+  renderAll();
+  alert('✅ 成员名字已修改，原本拥有的花朵记录不会改变。');
+}
+
 async function adminDeleteMember(id){
  if(!confirm('确定删除这个成员及其所有花花记录吗？'))return;
  const r=await sb.from('members').delete().eq('id',id);if(r.error)return alert(r.error.message);await loadAll()
 }
 
 async function adminAddFlower(){
- const name=newFlowerName.value.trim();if(!name)return alert('请输入花名');
- let image_url=null;
- let file=newFlowerImage.files[0];
- if(file){
-  file=await compressImageForUpload(file,720,.70);
-  const ext=(file.name.split('.').pop()||'webp').toLowerCase();
-  const path=`optimized-flowers/${crypto.randomUUID()}.${ext}`;
-  const up=await sb.storage.from('flower-images').upload(path,file,{cacheControl:'31536000'});
-  if(up.error)return alert('图片上传失败：'+up.error.message);
-  image_url=sb.storage.from('flower-images').getPublicUrl(path).data.publicUrl
- }
- const r=await sb.from('flowers').insert({name,category:newFlowerClass.value,guild_score:Math.max(0,Number(newFlowerScore.value)||0),image_url});
- if(r.error)return alert(r.error.message);
- newFlowerName.value='';newFlowerScore.value='0';newFlowerImage.value='';await loadAll()
+  const name=newFlowerName.value.trim();
+  if(!name)return alert('请输入花名');
+
+  let image_url=null;
+  let file=newFlowerImage.files[0];
+
+  try{
+    if(file){
+      file=await compressImageForUpload(file,720,.70);
+      const uploaded=await uploadImageToR2(file,'flowers');
+      image_url=uploaded.url;
+    }
+
+    const r=await sb.from('flowers').insert({
+      name,
+      category:newFlowerClass.value,
+      guild_score:Math.max(0,Number(newFlowerScore.value)||0),
+      image_url
+    });
+
+    if(r.error)throw r.error;
+
+    newFlowerName.value='';
+    newFlowerScore.value='0';
+    newFlowerImage.value='';
+    await loadAll();
+    alert(`✅ 已新增：${name}${image_url?'（图片已存入 Cloudflare R2）':''}`);
+  }catch(e){
+    console.error(e);
+    alert('新增失败：'+(e?.message||String(e)));
+  }
 }
-  async function adminBatchAddFlowers(){
+
+async function adminBatchAddFlowers(){
   if(!isAdmin)return alert('只有管理员可以批量上传');
 
   const files=[...(batchRareFlowerImages.files||[])]
@@ -1300,24 +1385,19 @@ if(!category){
       }
 
       file=await compressImageForUpload(file,720,.70);
-      const ext=(file.name.split('.').pop()||'webp').toLowerCase();
-      const path=`optimized-flowers/${crypto.randomUUID()}.${ext}`;
 
-      // 1. 上传图片到 Supabase Storage
-      const up=await sb.storage.from('flower-images').upload(path,file,{cacheControl:'31536000'});
-
-      if(up.error){
-        console.error('图片上传失败：',name,up.error);
+      // 1. 上传图片到 Cloudflare R2
+      let image_url='';
+      try{
+        const uploaded=await uploadImageToR2(file,`batch-${category}`);
+        image_url=uploaded.url;
+      }catch(uploadErr){
+        console.error('R2 图片上传失败：',name,uploadErr);
         failed++;
         continue;
       }
 
-      // 2. 获取公开图片网址
-      const image_url=sb.storage
-        .from('flower-images')
-        .getPublicUrl(path).data.publicUrl;
-
-      // 3. 自动加入 flowers 表
+      // 2. 自动加入 flowers 表（花朵资料继续保存在 Supabase）
       const r=await sb.from('flowers').insert({
         name:name,
         category:category,
@@ -1345,7 +1425,7 @@ if(!category){
   await loadAll();
 
   alert(
-    `珍花批量上传完成！\n\n`+
+    `花朵批量上传完成（图片存入 Cloudflare R2）！\n\n`+
     `✅ 成功：${success} 朵\n`+
     `⏭️ 重复跳过：${skipped} 朵\n`+
     `❌ 失败：${failed} 朵`
@@ -1498,7 +1578,17 @@ if(table) table.style.display='block';
 }
  function renderAdmin(){
   if(!isAdmin)return;
-adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr><td>${esc(m.name)}</td><td><button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button></td></tr>`).join('')}</tbody></table></div>`;
+adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr>
+<td>
+  <input
+    type="text"
+    value="${esc(m.name)}"
+    style="width:min(260px,100%)"
+    onchange="adminUpdateMemberName('${m.id}',this.value)"
+  >
+</td>
+<td><button class="danger" onclick="adminDeleteMember('${m.id}')">删除</button></td>
+</tr>`).join('')}</tbody></table></div>`;
    renderAdminMemberFlowerSelectors();
    renderAdminFlowers();
    refreshOldImageOptimizeStatus();
