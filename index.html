@@ -361,7 +361,7 @@ select:focus{
   </div>
 </div>
 
-<h3>成员管理</h3>
+<h3 id="adminMemberTitle">成员管理</h3>
 <div class="row"><input id="newMemberName" placeholder="新增成员名字"><button class="primary" onclick="adminAddMember()">＋ 添加成员</button></div>
 <div id="adminMembers"></div>
 
@@ -1521,7 +1521,10 @@ if(table) table.style.display='block';
 }
  function renderAdmin(){
   if(!isAdmin)return;
-adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>成员</th><th>操作</th></tr></thead><tbody>${members.map(m=>`<tr>
+const memberTitle=document.getElementById('adminMemberTitle');
+  if(memberTitle)memberTitle.textContent=`成员管理（共 ${members.length} 位成员）`;
+adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>编号</th><th>成员</th><th>操作</th></tr></thead><tbody>${members.map((m,index)=>`<tr>
+<td>${index+1}</td>
 <td>${esc(m.name)}</td>
 <td>
   <button onclick="adminPromptRenameMember('${m.id}')">✏️ 修改</button>
