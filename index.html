@@ -927,15 +927,13 @@ function renderFlowerOwners(){
                 <table style="width:min(100%,440px);min-width:0;table-layout:fixed">
                     <thead>
                         <tr>
-                            <th style="width:58%">拥有成员</th>
-                            <th style="width:42%">公会竞赛分</th>
+                            <th>拥有成员（公会竞赛分）</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${owners.map(m=>`
                             <tr>
-                                <td>${esc(m.name)}</td>
-                                <td class="score">${(Number(f.guild_score)||0)+memberBonusScore(memberFlowers.find(x=>x.member_id===m.id && x.flower_id===flowerId && x.quantity>0))}</td>
+                                <td>${esc(m.name)} <span class="score" style="margin-left:12px">（${(Number(f.guild_score)||0)+memberBonusScore(memberFlowers.find(x=>x.member_id===m.id && x.flower_id===flowerId && x.quantity>0))}分）</span></td>
                             </tr>
                         `).join('')}
                     </tbody>
