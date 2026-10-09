@@ -923,17 +923,19 @@ function renderFlowerOwners(){
         flowerImage +
         (owners.length
             ? `
-            <div class="table-wrap">
-                <table>
+            <div class="table-wrap" style="display:flex;justify-content:center">
+                <table style="width:min(100%,440px);min-width:0;table-layout:fixed">
                     <thead>
                         <tr>
-                            <th>拥有成员</th>
+                            <th style="width:58%">拥有成员</th>
+                            <th style="width:42%">公会竞赛分</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${owners.map(m=>`
                             <tr>
                                 <td>${esc(m.name)}</td>
+                                <td class="score">${(Number(f.guild_score)||0)+memberBonusScore(memberFlowers.find(x=>x.member_id===m.id && x.flower_id===flowerId && x.quantity>0))}</td>
                             </tr>
                         `).join('')}
                     </tbody>
