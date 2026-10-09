@@ -591,6 +591,11 @@ function loadMoreCatalog(){
   renderCatalog(false);
 }
 
+let editingBonusFlowerId=null;
+function toggleBonusEditor(flowerId){
+ editingBonusFlowerId=editingBonusFlowerId===flowerId?null:flowerId;
+ renderCatalog(false);
+}
 function renderCatalog(resetIfChanged=true){
   // Guard against browser password-manager/autofill putting the signed-in email in this unrelated search box.
   if(sessionUser?.email && searchFlower.value.trim().toLowerCase()===sessionUser.email.trim().toLowerCase()) searchFlower.value='';
@@ -633,13 +638,14 @@ function renderCatalog(resetIfChanged=true){
     return `<div class="flower">
       ${f.image_url?`<img loading="lazy" decoding="async" src="${esc(f.image_url)}" alt="${esc(f.name)}">`:'<div class="noimg">🌼</div>'}
       <b>${esc(f.name)}</b> <span class="tag">${esc(f.category)}</span>
-      <div class="score">公会竞赛分：${total}${bonus?` <span style="font-size:12px;font-weight:600;color:#9b6b80">（基础 ${base} +${bonus}）</span>`:''}</div>
+      <div class="score">公会竞赛分：${total}</div>
       ${ownedRow
-        ? `<div style="margin-top:8px;padding:8px;background:#fff8fb;border-radius:12px">
-            <div class="hint" style="text-align:center;margin-bottom:6px">🌟 进阶加分</div>
-            <div class="bonus-score-box">
-              ${[0,1,2].map(n=>`<button type="button" class="bonus-score-btn ${bonus===n?'active':''}" onclick="setMyFlowerBonus('${f.id}',${n})">${n===0?'0':'+'+n}</button>`).join('')}
-            </div>
+        ? `<div style="margin-top:8px">
+            <button type="button" class="secondary" style="width:100%;padding:7px" onclick="toggleBonusEditor('${f.id}')">✏️ 修改进阶加分${bonus?'（+'+bonus+'）':''}</button>
+            ${editingBonusFlowerId===f.id?`<div style="margin-top:7px;padding:8px;background:#fff8fb;border-radius:12px">
+              <div class="hint" style="text-align:center;margin-bottom:6px">🌟 进阶加分</div>
+              <div class="bonus-score-box">${[0,1,2].map(n=>`<button type="button" class="bonus-score-btn ${bonus===n?'active':''}" onclick="setMyFlowerBonus('${f.id}',${n})">${n===0?'0':'+'+n}</button>`).join('')}</div>
+            </div>`:''}
           </div>
           <div style="display:flex;gap:6px;margin-top:8px">
             <button class="secondary" style="flex:1" disabled>✓ 已拥有</button>
@@ -736,7 +742,7 @@ async function setMyFlowerBonus(flowerId,bonus){
  if(!row)return alert('找不到这朵花的拥有记录');
  const r=await sb.from('member_flowers').update({bonus_score:bonus}).eq('member_id',mine.id).eq('flower_id',flowerId);
  if(r.error)return alert('保存加分失败：'+r.error.message);
- row.bonus_score=bonus; renderCatalog(false); renderMyOwned(); renderLookup();
+ row.bonus_score=bonus; editingBonusFlowerId=null; renderCatalog(false); renderMyOwned(); renderLookup();
 }
 function renderMyOwned(){
  const mine=myMember();
