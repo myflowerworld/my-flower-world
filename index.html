@@ -638,10 +638,11 @@ function renderCatalog(resetIfChanged=true){
     return `<div class="flower">
       ${f.image_url?`<img loading="lazy" decoding="async" src="${esc(f.image_url)}" alt="${esc(f.name)}">`:'<div class="noimg">🌼</div>'}
       <b>${esc(f.name)}</b> <span class="tag">${esc(f.category)}</span>
-      <div class="score">公会竞赛分：${total}</div>
+      <div class="score" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">公会竞赛分：${total}
+        ${ownedRow?`<button type="button" class="secondary" title="修改进阶加分" aria-label="修改进阶加分" style="font-size:15px;padding:3px 6px;border-radius:8px;line-height:1.2" onclick="toggleBonusEditor('${f.id}')">✏️</button>`:''}
+      </div>
       ${ownedRow
-        ? `<div style="margin-top:8px">
-            <button type="button" class="secondary" style="width:100%;padding:7px" onclick="toggleBonusEditor('${f.id}')">✏️ 修改进阶加分${bonus?'（+'+bonus+'）':''}</button>
+        ? `<div style="margin-top:6px">
             ${editingBonusFlowerId===f.id?`<div style="margin-top:7px;padding:8px;background:#fff8fb;border-radius:12px">
               <div class="hint" style="text-align:center;margin-bottom:6px">🌟 进阶加分</div>
               <div class="bonus-score-box">${[0,1,2].map(n=>`<button type="button" class="bonus-score-btn ${bonus===n?'active':''}" onclick="setMyFlowerBonus('${f.id}',${n})">${n===0?'0':'+'+n}</button>`).join('')}</div>
