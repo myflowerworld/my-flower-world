@@ -218,6 +218,13 @@ select:focus{
   font-size:13px;
 }
 
+
+/* ===== 成员花朵进阶加分 ===== */
+.bonus-score-box{display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:wrap}
+.bonus-score-btn{padding:6px 10px;border:1px solid #ffd2e4;background:#fff8fb;color:#a85a7c;border-radius:999px}
+.bonus-score-btn.active{background:#e85d9e;color:#fff;border-color:transparent}
+.total-score{font-weight:800;color:#b83272}
+
 </style>
 </head>
 <body>
@@ -704,49 +711,36 @@ async function addMine(flowerId){
 
   await loadAll();
 }
-function renderMyOwned(){
-  const mine=myMember();
-  if(!mine){
-    myOwned.innerHTML='';
-    return;
-  }
-
-  const rows=memberFlowers.filter(
-    x=>x.member_id===mine.id && x.quantity>0
-  );
-
-  if(!rows.length){
-    myOwned.innerHTML='<div class="hint">还没有添加花花</div>';
-    return;
-  }
-
-  myOwned.innerHTML=`
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>花名</th>
-            <th>分类</th>
-            <th>公会竞赛分</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map(r=>{
-            const f=flowers.find(x=>x.id===r.flower_id);
-            if(!f)return '';
-            return `
-              <tr>
-                <td>${esc(f.name)}</td>
-                <td>${esc(f.category)}</td>
-                <td>${f.guild_score||0}</td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+function memberBonusScore(row){
+ const n=Number(row?.bonus_score)||0;
+ return [0,1,2].includes(n)?n:0;
 }
+async function setMyFlowerBonus(flowerId,bonus){
+ const mine=myMember(); if(!mine)return alert('请先选择自己的成员名字');
+ bonus=Number(bonus); if(![0,1,2].includes(bonus))return;
+ const row=memberFlowers.find(x=>x.member_id===mine.id&&x.flower_id===flowerId);
+ if(!row)return alert('找不到这朵花的拥有记录');
+ const r=await sb.from('member_flowers').update({bonus_score:bonus}).eq('member_id',mine.id).eq('flower_id',flowerId);
+ if(r.error)return alert('保存加分失败：'+r.error.message);
+ row.bonus_score=bonus; renderMyOwned(); renderLookup();
+}
+function renderMyOwned(){
+ const mine=myMember();
+ if(!mine){myOwned.innerHTML='';return}
+ const rows=memberFlowers.filter(x=>x.member_id===mine.id&&x.quantity>0);
+ if(!rows.length){myOwned.innerHTML='<div class="hint">还没有添加花花</div>';return}
+ myOwned.innerHTML=`<div class="table-wrap"><table>
+ <thead><tr><th>花名</th><th>分类</th><th>基础分</th><th>进阶加分</th><th>公会竞赛分</th></tr></thead>
+ <tbody>${rows.map(r=>{
+   const f=flowers.find(x=>x.id===r.flower_id); if(!f)return '';
+   const base=Number(f.guild_score)||0, bonus=memberBonusScore(r), total=base+bonus;
+   return `<tr><td>${esc(f.name)}</td><td>${esc(f.category)}</td><td>${base}</td>
+   <td><div class="bonus-score-box">${[0,1,2].map(n=>`<button type="button" class="bonus-score-btn ${bonus===n?'active':''}" onclick="setMyFlowerBonus('${f.id}',${n})">${n===0?'0':'+'+n}</button>`).join('')}</div></td>
+   <td class="total-score">${total}</td></tr>`;
+ }).join('')}</tbody></table></div>
+ <div class="hint" style="margin-top:8px">🌟 进阶后可为自己的花选择 0、+1 或 +2；只影响自己的这朵花，不会改变花库基础分。</div>`;
+}
+
 function renderLookupSelectors(){
  const oldMember=lookupMember.value, oldFlower=lookupFlower?.value||'';
  lookupMember.innerHTML='<option value="">请选择成员</option>'+members.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
@@ -800,7 +794,7 @@ function renderLookup(){
             }
             <b>${esc(x.f.name)}</b>
             <span class="tag">${esc(x.f.category)}</span>
-            <div class="score">公会竞赛分：${x.f.guild_score||0}</div>
+            <div class="score">公会竞赛分：${(Number(x.f.guild_score)||0)+memberBonusScore(x.r)}</div>
           </div>
         `).join('')
       }</div>`
