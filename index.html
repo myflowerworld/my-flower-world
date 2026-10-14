@@ -448,14 +448,19 @@ select:focus{
 </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase library loads with a backup CDN during startup. -->
 <script>
 const SUPABASE_URL = 'https://vkilecxzwmhbfuybbcrh.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_k6e8rAKC6CAtgOMMJctSwg_o0e9_7Pe';
 const R2_UPLOAD_WORKER_URL = 'https://pingan-flower-upload.elynwws2003.workers.dev/';
 </script>
 <script>
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+let sb=null;
+const STARTUP_TIMEOUT_MS=14000;
+function startupTimeout(promise,ms,label){let timer;return Promise.race([Promise.resolve(promise),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label+"连接超时（"+Math.round(ms/1000)+"秒）")),ms)})]).finally(()=>clearTimeout(timer))}
+function connectionStatus(message,failed=false){const el=document.getElementById("connection");if(!el)return;el.innerHTML="";const label=document.createElement("span");label.textContent=message;el.appendChild(label);if(failed){const b=document.createElement("button");b.className="primary";b.textContent="🔄 重新连接";b.style.marginLeft="10px";b.onclick=()=>location.reload();el.appendChild(b)}}
+function loadScriptFrom(url,ms=9000){return new Promise((resolve,reject)=>{const script=document.createElement("script");let finished=false;const t=setTimeout(()=>{if(finished)return;finished=true;script.remove();reject(new Error("脚本连接超时"))},ms);script.src=url;script.onload=()=>{if(finished)return;finished=true;clearTimeout(t);resolve()};script.onerror=()=>{if(finished)return;finished=true;clearTimeout(t);script.remove();reject(new Error("脚本下载失败"))};document.head.appendChild(script)})}
+async function initSupabase(){if(window.supabase?.createClient){sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);return}const cdns=["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js","https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"];for(const url of cdns){try{await loadScriptFrom(url);if(window.supabase?.createClient){sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);return}}catch(e){console.warn("Supabase CDN unavailable",url,e)}}throw new Error("无法加载 Supabase 程序库，请检查网络或尝试其他浏览器") }
 let members=[],flowers=[],memberFlowers=[],admins=[],sessionUser=null,isAdmin=false,anonSessionBackup=null;
 const MEMBER_STORAGE_KEY='garden_active_member_id';
 const ADMIN_REMEMBER_KEY='garden_remember_admin';
@@ -473,13 +478,13 @@ function adminUI(){
 async function ensureSession(){
  const {data}=await sb.auth.getSession();
  if(data.session){sessionUser=data.session.user;return data.session}
- const {data:s,error}=await sb.auth.signInAnonymously();
+ const {data:s,error}=await startupTimeout(sb.auth.signInAnonymously(),STARTUP_TIMEOUT_MS,"成员匿名登录");
  if(error)throw error;
  sessionUser=s.user;return s.session
 }
 async function checkAdmin(){
  if(!sessionUser || !sessionUser.email){isAdmin=false;return}
- const {data,error}=await sb.rpc('is_admin');
+ const {data,error}=await startupTimeout(sb.rpc('is_admin'),STARTUP_TIMEOUT_MS,'管理员权限检查');
 isAdmin=!error&&data===true;
 renderLookup();
   }
@@ -533,12 +538,12 @@ flowers=(f.data||[]).sort((a,b)=>{
 });
 memberFlowers=mf.data||[];
   if(isAdmin){
-   const a=await sb.from('admins').select('*').order('email');
+   const a=await startupTimeout(sb.from('admins').select('*').order('email'),STARTUP_TIMEOUT_MS,'读取管理员名单');
    admins=a.error?[]:(a.data||[]);
   }
-  connection.textContent='✅ 已连接「平安公会的花园世界」云端资料';
+  connectionStatus('✅ 已连接「平安公会的花园世界」云端资料');
   renderAll()
- }catch(e){connection.textContent='❌ 连接失败：'+e.message}
+ }catch(e){console.error('花园资料读取失败',e);connectionStatus('❌ 读取资料失败：'+(e?.message||String(e)),true);throw e}
 }
 function myMember(){
  // 1. Member identity is remembered locally per website/domain.
@@ -1551,30 +1556,30 @@ adminMembers.innerHTML=`<div class="table-wrap"><table><thead><tr><th>编号</th
 function renderAll(){renderIdentity();renderCatalog();renderMyOwned();renderLookupSelectors();renderLookup();renderFlowerOwners();renderAdmin();adminUI()}
 async function boot(){
  try{
-  let {data:sessionData}=await sb.auth.getSession();
+  connectionStatus('🌱 正在加载花园程序…');
+  await initSupabase();
+  connectionStatus('🌱 正在检查登录状态…');
+  let {data:sessionData}=await startupTimeout(sb.auth.getSession(),STARTUP_TIMEOUT_MS,'读取登录状态');
   const remember=localStorage.getItem(ADMIN_REMEMBER_KEY)==='true';
-
-  // If an administrator session exists but "remember me" was not enabled,
-  // discard it and return to an anonymous member session.
   if(sessionData.session?.user?.email && !remember){
-    await sb.auth.signOut({scope:'local'});
+    await startupTimeout(sb.auth.signOut({scope:'local'}),STARTUP_TIMEOUT_MS,'切换成员模式');
     sessionData={session:null};
   }
-
+  connectionStatus('🌱 正在连接成员账号…');
   await ensureSession();
-  const {data}=await sb.auth.getUser();
-  sessionUser=data.user;
-  await checkAdmin();
-
-  // Existing remembered admin session: enter admin mode automatically.
+  // getSession() and signInAnonymously() already return the user.
+  // Avoid a redundant auth.getUser() network call that can stall in WeChat browsers.
+  if(sessionUser?.email){
+    connectionStatus('🌱 正在检查管理员权限…');
+    await checkAdmin();
+  }else{isAdmin=false}
   if(isAdmin && remember){
     const savedEmail=localStorage.getItem(ADMIN_EMAIL_KEY)||sessionUser?.email||'';
-    if(savedEmail) localStorage.setItem(ADMIN_EMAIL_KEY,savedEmail);
+    if(savedEmail)localStorage.setItem(ADMIN_EMAIL_KEY,savedEmail);
   }
-
   adminUI();
   await loadAll();
- }catch(e){connection.textContent='❌ 初始化失败：'+e.message}
+ }catch(e){console.error('花园启动失败',e);connectionStatus('❌ 花园连接失败：'+(e?.message||String(e))+'。请点击重新连接；若仍失败，截图给管理员。',true)}
 }
 boot();
 </script>
