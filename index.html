@@ -1422,6 +1422,28 @@ async function adminUpdateScore(id,v){
 
   await loadAll();
 }
+async function adminUpdateFlowerCategory(id, category, selectEl){
+  if(!isAdmin){alert('只有管理员可以修改分类');return;}
+  const allowed=['仙','华','珍','普','凡'];
+  const flower=flowers.find(f=>f.id===id);
+  if(!flower || !allowed.includes(category))return;
+  const previous=flower.category;
+  if(category===previous)return;
+  selectEl.disabled=true;
+  try{
+    const {error}=await sb.from('flowers').update({category}).eq('id',id);
+    if(error)throw error;
+    flower.category=category;
+    const row=selectEl.closest('tr');
+    if(row)row.dataset.category=category;
+    // Refresh member-facing views without collapsing the admin's current table.
+    renderCatalog();renderMyOwned();renderLookup();renderFlowerLookupOptions(lookupFlower.value);renderFlowerOwners();
+    renderAdminMemberFlowerOptions();
+  }catch(e){
+    selectEl.value=previous;
+    alert('分类保存失败：'+(e?.message||String(e)));
+  }finally{selectEl.disabled=false;}
+}
 async function adminDeleteFlower(id){
  if(!confirm('确定删除这朵花吗？成员收藏里的这朵花也会一起移除。'))return;
  const r=await sb.from('flowers').delete().eq('id',id);if(r.error)return alert(r.error.message);await loadAll()
@@ -1485,7 +1507,9 @@ function renderAdminFlowers(keyword=''){
   >
 </td>
               <td>${f.image_url?`<img loading="lazy" decoding="async" src="${esc(f.image_url)}" style="width:70px;height:70px;object-fit:cover;border-radius:10px;">`:'—'}</td>
-              <td>${esc(f.category)}</td>
+              <td><select aria-label="修改花朵分类" style="min-width:76px;width:90px" onchange="adminUpdateFlowerCategory('${f.id}',this.value,this)">
+                ${['仙','华','珍','普','凡'].map(c=>`<option value="${c}" ${f.category===c?'selected':''}>${c}</option>`).join('')}
+              </select></td>
               <td>
                 <input style="width:90px" type="number" min="0"
                   value="${f.guild_score||0}"
