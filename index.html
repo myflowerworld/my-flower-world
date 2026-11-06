@@ -751,17 +751,26 @@ async function setMyFlowerBonus(flowerId,bonus){
  row.bonus_score=bonus; editingBonusFlowerId=null; renderCatalog(false); renderMyOwned(); renderLookup();
 }
 function renderMyOwned(){
- const mine=myMember();
- if(!mine){myOwned.innerHTML='';return}
- const rows=memberFlowers.filter(x=>x.member_id===mine.id&&x.quantity>0);
- if(!rows.length){myOwned.innerHTML='<div class="hint">还没有添加花花</div>';return}
- myOwned.innerHTML=`<div class="table-wrap"><table>
- <thead><tr><th>花名</th><th>分类</th><th>公会竞赛分</th></tr></thead>
- <tbody>${rows.map(r=>{
-   const f=flowers.find(x=>x.id===r.flower_id); if(!f)return '';
-   const total=(Number(f.guild_score)||0)+memberBonusScore(r);
-   return `<tr><td>${esc(f.name)}</td><td>${esc(f.category)}</td><td class="total-score">${total}</td></tr>`;
- }).join('')}</tbody></table></div>`;
+  const mine=myMember();
+  if(!mine){myOwned.innerHTML='';return}
+  const order={'仙':0,'华':1,'珍':2,'普':3,'凡':4};
+  const rows=memberFlowers
+    .filter(r=>r.member_id===mine.id && Number(r.quantity)>0)
+    .map(r=>({r,f:flowers.find(f=>f.id===r.flower_id)}))
+    .filter(x=>x.f)
+    .sort((a,b)=>
+      (order[a.f.category]??99)-(order[b.f.category]??99) ||
+      ((Number(b.f.guild_score)||0)+memberBonusScore(b.r))-((Number(a.f.guild_score)||0)+memberBonusScore(a.r)) ||
+      String(a.f.name||'').localeCompare(String(b.f.name||''),'zh-CN')
+    );
+  if(!rows.length){myOwned.innerHTML='<div class="hint">共拥有 0 朵花｜还没有添加花花</div>';return}
+  myOwned.innerHTML=`<div class="status" style="margin-bottom:10px;font-weight:700;color:#b83272">🌷 共拥有 ${rows.length} 朵花</div>
+  <div class="table-wrap"><table style="min-width:520px">
+  <thead><tr><th style="width:70px">序号</th><th>花名</th><th>分类</th><th>公会竞赛分</th></tr></thead>
+  <tbody>${rows.map((x,i)=>{
+    const total=(Number(x.f.guild_score)||0)+memberBonusScore(x.r);
+    return `<tr><td>${i+1}</td><td>${esc(x.f.name)}</td><td>${esc(x.f.category)}</td><td class="total-score">${total}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
 }
 
 function renderLookupSelectors(){
